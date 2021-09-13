@@ -30,7 +30,7 @@ function World() {
   this.controls.target.x = start.x;
   this.controls.target.y = start.y;
   this.controls.maxDistance = 0.5;
-  this.controls.minDistance = 0.06;
+  this.addEventListeners();
 }
 
 World.prototype.resize = function() {
@@ -58,6 +58,27 @@ World.prototype.useDayMode = function() {
   document.body.classList.remove('night-mode');
 }
 
+World.prototype.addEventListeners = function() {
+  window.addEventListener('resize', function(e) {
+    this.resize()
+  }.bind(this));
+  window.addEventListener('mousemove', function(e) {
+    tooltip.hide();
+  }.bind(this))
+}
+
+World.prototype.render = function() {
+  requestAnimationFrame(this.render.bind(this));
+  if (points.initialized && points.mesh.material.uniforms.useNightMode.value > 0.5) {
+    this.composer.render();
+  } else {
+    this.renderer.render(world.scene, world.camera);
+  }
+  this.controls.update();
+  touchtexture.update();
+  stats.update();
+}
+
 /**
 * Points
 **/
@@ -69,8 +90,7 @@ Points.prototype.init = function() {
   this.initialized = false;
   this.positions = [];
   this.texts = [];
-  this.mouse = new THREE.Vector2();
-  this.clock = new THREE.Clock();
+  this.n = 50000;
 
   var tooltip = document.querySelector('#tooltip'),
       point = document.querySelector('#point'),
@@ -81,7 +101,8 @@ Points.prototype.init = function() {
   })
 
   fetch('assets/data/positions.json').then(data => data.json()).then(json => {
-    this.positions = json;
+    this.positions = json.positions.slice(0, this.n);
+    this.colors = json.colors.slice(0, this.n);
     var clickColor = new THREE.Color(),
         clickColors = new Float32Array(this.positions.length * 3),
         colors = new Float32Array(this.positions.length * 3),
@@ -121,30 +142,9 @@ Points.prototype.init = function() {
     details.timeout = setTimeout(function() {
       details.redraw();
     }, 1000)
-    // add event listeners
-    this.addEventListeners();
     // flip the initialization bool
     this.initialized = true;
   })
-}
-
-Points.prototype.addEventListeners = function() {
-  // wheel
-  window.addEventListener('wheel', function(e) {
-    this.clock.start();
-    tooltip.hide();
-  }.bind(this))
-  // mousemove
-  window.addEventListener('mousemove', function(e) {
-    // store the mouse coords
-    this.mouse = {x: e.clientX, y: e.clientY};
-    // start running a clock
-    this.clock.start();
-    // hide the modal if the mousemovement isn't inside the tooltip
-    tooltip.hide();
-  }.bind(this))
-  // resize
-  window.addEventListener('resize', world.resize);
 }
 
 Points.prototype.getMaterial = function() {
@@ -178,22 +178,6 @@ Points.prototype.getMaterial = function() {
       }
     }
   });
-}
-
-Points.prototype.update = function() {
-  if (this.clock.getElapsedTime() > 0.5) {
-    var index = picker.selectedIndex;
-    if (index === -1 || tooltip.displayed) return;
-    this.showItem(index);
-  }
-}
-
-Points.prototype.showItem = function(index) {
-  var screenCoords = this.mouse;
-  var text = this.texts[index];
-  if (!text) return;
-  console.log(' * showing', index)
-  tooltip.display(screenCoords, text);
 }
 
 /**
@@ -274,17 +258,37 @@ function Picker() {
   this.selectedIndex = -1;
 }
 
+// get the mesh in which to render picking elements
+Picker.prototype.init = function() {
+  this.addEventListeners();
+  this.mesh = points.mesh.clone();
+  var material = points.getMaterial();
+  material.uniforms.useColor.value = 1.0;
+  this.mesh.material = material;
+  this.scene.add(this.mesh);
+  this.initialized = true;
+}
+
+Picker.prototype.addEventListeners = function() {
+  window.addEventListener('click', function(e) {
+    var idx = this.select(this.getMouseOffsets(e));
+    if (idx !== -1) picker.showItem(idx);
+  }.bind(this));
+  window.addEventListener('mousemove', function(e) {
+    this.mouse.copy(this.getMouseOffsets(e))
+  }.bind(this))
+}
+
+Picker.prototype.showItem = function(index) {
+  tooltip.display(index, this.mouse);
+}
+
 // get the texture on which off-screen rendering will happen
 Picker.prototype.getTexture = function() {
   var size = getCanvasSize();
   var tex = new THREE.WebGLRenderTarget(size.w * dpi, size.h * dpi);
   tex.texture.minFilter = THREE.LinearFilter;
   return tex;
-}
-
-// on canvas mousedown store the coords where user moused down
-Picker.prototype.onMouseDown = function(e) {
-  this.mouse = this.getMouseOffsets(e);
 }
 
 // get the x, y offsets of a click within the canvas
@@ -295,29 +299,6 @@ Picker.prototype.getMouseOffsets = function(e) {
     y: e.clientY ? e.clientY : e.pageY,
   };
   return position;
-}
-
-// on canvas click, show detailed modal with clicked image
-Picker.prototype.onMouseMove = function(e) {
-  // identify the selected cell idx (-1 means no selected cell)
-  this.mouse.copy(this.getMouseOffsets(e));
-  if (this.timeout) clearTimeout(this.timeout);
-  this.timeout = setTimeout(function() {
-    var cellIdx = this.select(this.mouse);
-    // cell idx is the index position of the hovered point. -1 means no point selected
-    this.selectedIndex = cellIdx;
-  }.bind(this), 50)
-}
-
-// get the mesh in which to render picking elements
-Picker.prototype.init = function() {
-  window.addEventListener('mousemove', this.onMouseMove.bind(this));
-  this.mesh = points.mesh.clone();
-  var material = points.getMaterial();
-  material.uniforms.useColor.value = 1.0;
-  this.mesh.material = material;
-  this.scene.add(this.mesh);
-  this.initialized = true;
 }
 
 // draw an offscreen world then reset the render target so world can update
@@ -494,21 +475,18 @@ TouchTexture.prototype.drawCursor = function() {
 function Tooltip() {
   this.target = document.querySelector('#tooltip');
   this.displayed = false;
+  this.addEventListeners();
 }
 
-Tooltip.prototype.display = function(pos, text) {
+Tooltip.prototype.display = function(index, pos) {
   var pos = pos || {
-    x: window.innerWidth / 2,
-    y: window.innerHeight / 2,
+    x: 50,
+    y: 50,
   }
   this.displayed = true;
   this.target.style.left = pos.x + 'px';
   this.target.style.top = pos.y + 'px';
-  this.target.innerHTML = this.getHtml(decodeURIComponent(escape(text)));
-  // prevent mouse movements in the tooltip from closing tooltip
-  this.target.addEventListener('mousemove', function(e) {
-    e.stopPropagation();
-  })
+  this.target.innerHTML = this.getHtml(index);
 }
 
 Tooltip.prototype.hide = function() {
@@ -516,22 +494,21 @@ Tooltip.prototype.hide = function() {
   this.target.innerHTML = '';
 }
 
-Tooltip.prototype.getHtml = function(text) {
-  return `
-    <div id='tweet'>
-      <div class="row align-center space-between">
-        <div class="row align-center">
-          <img class='twitter-image' src="https://via.placeholder.com/40">
-          <div class="col twitter-name">
-            <div>Donald J. Trump</div>
-            <div>@realDonaldTrump</div>
-          </div>
-        </div>
-        <img class="twitter-icon" src="assets/images/twitter-icon.svg">
-      </div>
-      <p id='text'>${text}</p>
-    </div>
-  `
+Tooltip.prototype.getHtml = function(index) {
+  var metadata = points.texts[index]
+  return _.template(document.querySelector('#tooltip-template').innerHTML)({
+    index: index,
+    metadata: metadata,
+  });
+}
+
+Tooltip.prototype.addEventListeners = function() {
+  window.addEventListener('wheel', function(e) {
+    this.hide();
+  }.bind(this))
+  this.target.addEventListener('mousemove', function(e) {
+    e.stopPropagation();
+  })
 }
 
 /**
@@ -540,8 +517,9 @@ Tooltip.prototype.getHtml = function(text) {
 
 function Details() {
   this.displayed = [];
-  this.n = 30;
+  this.n = 10;
   this.margin = 100;
+  this.size = 40;
   this.timeout = null;
   this.mouse = {
     down: false,
@@ -580,8 +558,8 @@ Details.prototype.select = function() {
       var d = {
         x: screen.x,
         y: screen.y,
-        width: 26,
-        height: 26,
+        width: this.size,
+        height: this.size,
         idx: i,
       }
       // determine if this detail overlaps others
@@ -599,6 +577,7 @@ Details.prototype.select = function() {
       if (!overlaps) {
         // add the rendered HTML content
         var elem = document.createElement('div');
+        elem.style.backgroundImage = 'url(' + points.texts[i].thumb + ')';
         elem.className = 'detail-display';
         elem.id = 'detail-' + d.idx;
         elem.style.left = d.x + 'px';
@@ -607,6 +586,10 @@ Details.prototype.select = function() {
         elem.style.width = d.width + 'px';
         elem.style.animationDelay = Math.random() * 2.0 + 's';
         d.elem = elem;
+        elem.onclick = function(i, e) {
+          picker.showItem(i);
+          e.stopPropagation();
+        }.bind(this, i);
         // add the point to the set of rendered points
         this.displayed.push(d);
       }
@@ -621,6 +604,7 @@ Details.prototype.render = function() {
 }
 
 Details.prototype.clear = function() {
+  if (!this.displayed.length) return;
   this.displayed.forEach(function(d) {
     var elem = d.elem;
     elem.parentNode.removeChild(elem);
@@ -629,6 +613,7 @@ Details.prototype.clear = function() {
 }
 
 Details.prototype.redraw = function() {
+  console.log(' * redraw')
   this.clear();
   this.select();
   this.render();
@@ -662,7 +647,7 @@ Details.prototype.addEventListeners = function() {
     if (this.timeout) clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
       this.redraw();
-    }.bind(this), 50)
+    }.bind(this), 700)
   }.bind(this))
 
   window.addEventListener('resize', function() {
@@ -746,19 +731,6 @@ function getTexture(src) {
 * Main
 **/
 
-function animate() {
-  requestAnimationFrame(animate);
-  if (points.initialized && points.mesh.material.uniforms.useNightMode.value > 0.5) {
-    world.composer.render();
-  } else {
-    world.renderer.render(world.scene, world.camera);
-  }
-  world.controls.update();
-  touchtexture.update();
-  points.update();
-  stats.update();
-}
-
 var world = new World();
 var picker = new Picker();
 var touchtexture = new TouchTexture();
@@ -770,7 +742,7 @@ var details = new Details();
 touchtexture.init();
 points.init();
 world.resize();
-animate();
+world.render();
 
 // add stats
 document.body.appendChild(stats.dom);

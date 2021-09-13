@@ -62,6 +62,10 @@
     varying vec3 vClickColor;
     varying float vSize;
 
+    void red() {
+      gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    }
+
     void main() {
       // get point shape
       if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
@@ -77,16 +81,37 @@
     }
     </script>
 
-    <label class='switch'>
-      <input class='switch__input' type='checkbox'>
-      <span class='switch__background'>
-        <span class='switch__toggle'>
-          <span class='switch__moon'></span>
-        </span>
-        <span class='switch__stars'></span>
-        <span class='switch__clouds'></span>
-      </span>
-    </label>
+    <script id='tooltip-template' type='x-html/x-template'>
+      <div class="wiki-bio row align-center">
+        <div class="wiki-image" style="background-image:url(<%= metadata.thumb %>)"></div>
+        <div class="col ">
+          <div class="row space-between">
+            <div class="col wiki-name"><%= metadata.name.replaceAll('_', ' ') %></div>
+            <a href="https://en.wikipedia.org/wiki/<%= metadata.name %>" target="_blank">
+              <img class="wiki-icon" src="assets/images/wikipedia-icon.svg">
+            </a>
+          </div>
+          <p><%= metadata.abstract %></p>
+        </div>
+      </div>
+    </script>
+
+    <!-- Sample template for tweets -->
+    <script type='x-html/x-template'>
+      <div id='tweet'>
+        <div class="row align-center space-between">
+          <div class="row align-center">
+            <img class='twitter-image' src="https://via.placeholder.com/40">
+            <div class="col twitter-name">
+              <div>Donald J. Trump</div>
+              <div>@realDonaldTrump</div>
+            </div>
+          </div>
+          <img class="twitter-icon" src="assets/images/twitter-icon.svg">
+        </div>
+        <p id='text'><%= decodeURIComponent(escape(metadata)) %></p>
+      </div>
+    </script>
 
     <div id='canvas-container'>
       <div id='tooltip'></div>
@@ -98,6 +123,7 @@
     <script src='assets/js/luminosity.js'></script>
     <script src='assets/js/effect-composer.js'></script>
     <script src='assets/js/unreal-bloom.js'></script>
+    <script src='assets/js/lodash.min.js'></script>
     <script src='assets/js/script.js'></script>
   </body>
 </html>
