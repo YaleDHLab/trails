@@ -87,7 +87,7 @@
 
     <script id='tooltip-template' type='x-html/x-template'>
       <div class="wiki-bio row align-center">
-        <div class="wiki-image" style="background-image:url(<%= metadata.thumb %>)"></div>
+        <div class="wiki-image" style='background-image:url("<%= metadata.thumb %>")'></div>
         <div class="col ">
           <div class="row space-between">
             <div class="col wiki-name"><%= metadata.name.replaceAll('_', ' ') %></div>

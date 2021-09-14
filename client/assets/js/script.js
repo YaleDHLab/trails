@@ -141,7 +141,7 @@ Points.prototype.init = function() {
     picker.init();
     details.timeout = setTimeout(function() {
       details.redraw();
-    }, 1000)
+    }.bind(details), 1000)
     // flip the initialization bool
     this.initialized = true;
   })
@@ -517,7 +517,7 @@ Tooltip.prototype.addEventListeners = function() {
 
 function Details() {
   this.displayed = [];
-  this.n = 30;
+  this.n = 75;
   this.margin = 100;
   this.size = 40;
   this.timeout = null;
@@ -616,10 +616,15 @@ Details.prototype.clear = function() {
 }
 
 Details.prototype.redraw = function() {
-  console.log(' * redraw')
-  this.clear();
-  this.select();
-  this.render();
+  if (points.texts.length > 0) {
+    this.clear();
+    this.select();
+    this.render();
+  } else {
+    this.timeout = setTimeout(function() {
+      this.redraw();
+    }.bind(this), 500)
+  }
 }
 
 // measure the delta between e and the position of this.mouse
@@ -667,10 +672,11 @@ Details.prototype.addEventListeners = function() {
   }.bind(this))
 
   window.addEventListener('resize', function() {
+    this.clear();
     if (this.timeout) clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
       this.redraw();
-    }.bind(this), 50)
+    }.bind(this), 200)
   }.bind(this))
 }
 
