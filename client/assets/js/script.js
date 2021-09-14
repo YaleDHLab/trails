@@ -580,7 +580,7 @@ Details.prototype.select = function() {
           // add the rendered HTML content if the image can be loaded
           var url = points.texts[i].thumb;
           d.elem = document.createElement('div');
-          d.elem.style.backgroundImage = `url(${url})`;
+          d.elem.style.backgroundImage = `url("${url}")`;
           d.elem.className = 'detail-display';
           d.elem.id = 'detail-' + d.idx;
           d.elem.style.left = d.x + 'px';
@@ -596,7 +596,6 @@ Details.prototype.select = function() {
           this.displayed.push(d);
         }
       }
-
     }
   }
 }
@@ -623,20 +622,33 @@ Details.prototype.redraw = function() {
   this.render();
 }
 
+// measure the delta between e and the position of this.mouse
+Details.prototype.measureMouseMovement = function(e) {
+  return {
+    x: Math.abs(this.mouse.x - e.clientX),
+    y: Math.abs(this.mouse.y - e.clientY),
+  }
+}
+
 Details.prototype.addEventListeners = function() {
 
-  window.addEventListener('mousedown', function() {
+  window.addEventListener('mousedown', function(e) {
     this.mouse.down = true;
+    this.mouse.x = e.clientX;
+    this.mouse.y = e.clientY;
   }.bind(this))
 
-  window.addEventListener('mousemove', function() {
+  window.addEventListener('mousemove', function(e) {
     if (this.mouse.down) {
       this.mouse.dragging = true;
-      this.clear();
+      // if the user has dragged too far clear
+      var d = this.measureMouseMovement(e);
+      if (d.x > 1 || d.y > 1) this.clear();
     }
   }.bind(this))
 
-  window.addEventListener('mouseup', function() {
+  window.addEventListener('mouseup', function(e) {
+    // if the user has dragged too far clear
     if (this.mouse.dragging) {
       this.timeout = setTimeout(function() {
         this.redraw();
