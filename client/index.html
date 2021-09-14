@@ -40,8 +40,12 @@
       // adjust the point size based on the touchtexture
       vec4 brightness = texture2D(touchtexture, vec2(x, y));
       float touchSize = gl_PointSize * 200.0 * brightness.r * cameraPosition.z;
+      // scale point size with touch texture
       gl_PointSize = max(gl_PointSize, touchSize);
+      // set min point size
       gl_PointSize = max(gl_PointSize, 1.0);
+      // set max point size
+      gl_PointSize = min(gl_PointSize, 40.0);
 
       // pass varyings
       vColor = color;

@@ -6,8 +6,8 @@ var dpi = window.devicePixelRatio || 1;
 
 function World() {
   var start = {
-    x: 0.01,
-    y: -0.015,
+    x: 0.0,
+    y: 0.0,
     z: 0.5,
   }
   var size = getCanvasSize();
@@ -90,7 +90,7 @@ Points.prototype.init = function() {
   this.initialized = false;
   this.positions = [];
   this.texts = [];
-  this.n = 50000;
+  this.n = 150000;
 
   var tooltip = document.querySelector('#tooltip'),
       point = document.querySelector('#point'),
@@ -517,7 +517,7 @@ Tooltip.prototype.addEventListeners = function() {
 
 function Details() {
   this.displayed = [];
-  this.n = 10;
+  this.n = 30;
   this.margin = 100;
   this.size = 40;
   this.timeout = null;
@@ -577,7 +577,7 @@ Details.prototype.select = function() {
       if (!overlaps) {
         // add the rendered HTML content
         var elem = document.createElement('div');
-        elem.style.backgroundImage = 'url(' + points.texts[i].thumb + ')';
+        elem.style.backgroundImage = 'url(assets/data/thumbs/' + points.texts[i].name + '.jpg)';
         elem.className = 'detail-display';
         elem.id = 'detail-' + d.idx;
         elem.style.left = d.x + 'px';
