@@ -545,54 +545,58 @@ Details.prototype.select = function() {
   for (var i=0; i<points.positions.length; i++) {
     // don't stop 'til you get enough
     if (this.displayed.length === this.n) break;
-    // determine if this point is inside the frame
-    var p = points.positions[i];
-    if (
-      p[0] >= bounds.x[0] &&
-      p[0] <= bounds.x[1] &&
-      p[1] >= bounds.y[0] &&
-      p[1] <= bounds.y[1]
-    ) {
-      // create the detail object
-      var screen = worldToScreenCoords({x: p[0], y: p[1]})
-      var d = {
-        x: screen.x,
-        y: screen.y,
-        width: this.size,
-        height: this.size,
-        idx: i,
-      }
-      // determine if this detail overlaps others
-      var overlaps = false;
-      for (var j=0; j<this.displayed.length; j++) {
-        var o = this.displayed[j];
-        if (
-          intersects(d, o, 'x', 'width') &&
-          intersects(d, o, 'y', 'height')
-        ) {
-          overlaps = true;
-          break;
+    // determine if this point has an image;
+    if (points.texts[i].thumb) {
+      // determine if this point is inside the frame
+      var p = points.positions[i];
+      if (
+        p[0] >= bounds.x[0] &&
+        p[0] <= bounds.x[1] &&
+        p[1] >= bounds.y[0] &&
+        p[1] <= bounds.y[1]
+      ) {
+        // create the detail object
+        var screen = worldToScreenCoords({x: p[0], y: p[1]})
+        var d = {
+          x: screen.x,
+          y: screen.y,
+          width: this.size,
+          height: this.size,
+          idx: i,
+        }
+        // determine if this detail overlaps others
+        var overlaps = false;
+        for (var j=0; j<this.displayed.length; j++) {
+          var o = this.displayed[j];
+          if (
+            intersects(d, o, 'x', 'width') &&
+            intersects(d, o, 'y', 'height')
+          ) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (!overlaps) {
+          // add the rendered HTML content if the image can be loaded
+          var url = points.texts[i].thumb;
+          d.elem = document.createElement('div');
+          d.elem.style.backgroundImage = `url(${url})`;
+          d.elem.className = 'detail-display';
+          d.elem.id = 'detail-' + d.idx;
+          d.elem.style.left = d.x + 'px';
+          d.elem.style.top = d.y + 'px';
+          d.elem.style.height = d.height + 'px';
+          d.elem.style.width = d.width + 'px';
+          d.elem.style.animationDelay = Math.random() * 2.0 + 's';
+          d.elem.onclick = function(i, e) {
+            picker.showItem(i);
+            e.stopPropagation();
+          }.bind(this, i);
+          // add the point to the set of rendered points
+          this.displayed.push(d);
         }
       }
-      if (!overlaps) {
-        // add the rendered HTML content
-        var elem = document.createElement('div');
-        elem.style.backgroundImage = 'url(assets/data/thumbs/' + points.texts[i].name + '.jpg)';
-        elem.className = 'detail-display';
-        elem.id = 'detail-' + d.idx;
-        elem.style.left = d.x + 'px';
-        elem.style.top = d.y + 'px';
-        elem.style.height = d.height + 'px';
-        elem.style.width = d.width + 'px';
-        elem.style.animationDelay = Math.random() * 2.0 + 's';
-        d.elem = elem;
-        elem.onclick = function(i, e) {
-          picker.showItem(i);
-          e.stopPropagation();
-        }.bind(this, i);
-        // add the point to the set of rendered points
-        this.displayed.push(d);
-      }
+
     }
   }
 }
