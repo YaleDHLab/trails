@@ -62,9 +62,6 @@ World.prototype.addEventListeners = function() {
   window.addEventListener('resize', function(e) {
     this.resize()
   }.bind(this));
-  window.addEventListener('mousemove', function(e) {
-    tooltip.hide();
-  }.bind(this))
 }
 
 World.prototype.render = function() {
@@ -252,7 +249,6 @@ function Picker() {
   this.mesh = null;
   this.scene = new THREE.Scene();
   this.scene.background = new THREE.Color(0x000000);
-  this.mouse = new THREE.Vector2(); // stores last click location (unused)
   this.tex = this.getTexture();
   this.initialized = false;
   this.selectedIndex = -1;
@@ -270,17 +266,13 @@ Picker.prototype.init = function() {
 }
 
 Picker.prototype.addEventListeners = function() {
-  window.addEventListener('click', function(e) {
-    var idx = this.select(this.getMouseOffsets(e));
-    if (idx !== -1) picker.showItem(idx);
+  window.addEventListener('trails-mousedown', function(e) {
+    if (e.detail.dragging) return;
+    var index = this.select(e.detail.pos);
+    if (index !== -1) {
+      tooltip.display(index);
+    }
   }.bind(this));
-  window.addEventListener('mousemove', function(e) {
-    this.mouse.copy(this.getMouseOffsets(e))
-  }.bind(this))
-}
-
-Picker.prototype.showItem = function(index) {
-  tooltip.display(index, this.mouse);
 }
 
 // get the texture on which off-screen rendering will happen
@@ -289,16 +281,6 @@ Picker.prototype.getTexture = function() {
   var tex = new THREE.WebGLRenderTarget(size.w * dpi, size.h * dpi);
   tex.texture.minFilter = THREE.LinearFilter;
   return tex;
-}
-
-// get the x, y offsets of a click within the canvas
-Picker.prototype.getMouseOffsets = function(e) {
-  var elem = e.target;
-  var position = {
-    x: e.clientX ? e.clientX : e.pageX,
-    y: e.clientY ? e.clientY : e.pageY,
-  };
-  return position;
 }
 
 // draw an offscreen world then reset the render target so world can update
@@ -336,14 +318,14 @@ TouchTexture.prototype.init = function() {
   this.size = 512; // smaller is more performant but more susceptible to unit quantization issues
   this.maxAge = 40; // length of trail
   this.radius = 0.05;
-  this.cursorRadius = 0.01;
+  this.cursorRadius = 0.005;
   this.maxForce = 0.4; // max amount of momentum in big gestures
   this.frozen = false;
   this.mouse = {x: 0, y: 0};
   this.renderCanvas = false;
   this.trail = [];
   this.setTexture();
-  this.mouseMoveElem = world.renderer.domElement;
+  this.mouseMoveElem = document.body;
   this.addEventListeners();
 }
 
@@ -411,10 +393,7 @@ TouchTexture.prototype.handleMouseMove = function(e) {
   var w = elem.clientWidth;
   var h = elem.clientHeight;
   // get the initial, unnormalized point coords
-  var p = {
-    x: e.clientX,
-    y: e.clientY,
-  }
+  var p = getEventClientCoords(e);
   // convert x,y to positions within canvas (instead of positions within document/window)
   var elem = e.target;
   while (elem && elem.tag && elem.tag != 'html') {
@@ -469,28 +448,47 @@ TouchTexture.prototype.drawCursor = function() {
 }
 
 /**
- * Tooltip
+ * Tooltip: displays clicked items
  **/
 
 function Tooltip() {
+  this.worldCoords = null;
   this.target = document.querySelector('#tooltip');
-  this.displayed = false;
+  this.displayed = -1;
   this.addEventListeners();
 }
 
-Tooltip.prototype.display = function(index, pos) {
-  var pos = pos || {
-    x: 50,
-    y: 50,
+Tooltip.prototype.display = function(index, center=false) {
+  // bail if the user requested the item we're already showing
+  if (index == this.displayed) return;
+  // determine the x, y coords where this tooltip should be displayed
+  if (center) {
+    var pos = {
+      x: points.positions[index][0],
+      y: points.positions[index][1],
+    };
+  } else {
+    var pos = {
+      x: mouse.x,
+      y: mouse.y,
+    }
   }
-  this.displayed = true;
-  this.target.style.left = pos.x + 'px';
-  this.target.style.top = pos.y + 'px';
+  // to use the center of the clicked point as world coords
+  this.worldCoords = screenToWorldCoords(pos);
+  this.setPosition();
+  this.displayed = index;
   this.target.innerHTML = this.getHtml(index);
 }
 
+Tooltip.prototype.setPosition = function() {
+  var pos = worldToScreenCoords(this.worldCoords);
+  this.target.style.left = pos.x + 'px';
+  this.target.style.top = pos.y + 'px';
+}
+
 Tooltip.prototype.hide = function() {
-  this.displayed = false;
+  this.displayed = -1;
+  this.worldCoords = null;
   this.target.innerHTML = '';
 }
 
@@ -503,8 +501,9 @@ Tooltip.prototype.getHtml = function(index) {
 }
 
 Tooltip.prototype.addEventListeners = function() {
-  window.addEventListener('wheel', function(e) {
+  window.addEventListener('mousemove', function(e) {
     this.hide();
+    //this.setPosition(worldToScreenCoords(this.worldCoords));
   }.bind(this))
   this.target.addEventListener('mousemove', function(e) {
     e.stopPropagation();
@@ -516,103 +515,103 @@ Tooltip.prototype.addEventListeners = function() {
  **/
 
 function Details() {
-  this.displayed = [];
-  this.n = 75;
+  this.selected = [];
+  this.n = 50;
   this.margin = 100;
   this.size = 40;
   this.timeout = null;
+
   this.mouse = {
     down: false,
     dragging: false,
     x: null,
     y: null,
   };
+
   this.addEventListeners();
 }
 
 Details.prototype.select = function() {
-  function intersects(a, b, p, s) {
-    var margin = 10; // minimum margin between cells
-    var a0 = a[p];
-    var b0 = b[p];
-    var a1 = a[p] + a[s] + margin;
-    var b1 = b[p] + b[s] + margin;
-    return a0 >= b0 && a0 <= b1 ||
-           a1 >= b0 && a1 <= b1;
-  }
-
   var bounds = getWorldBounds();
   for (var i=0; i<points.positions.length; i++) {
     // don't stop 'til you get enough
-    if (this.displayed.length === this.n) break;
-    // determine if this point has an image;
-    if (points.texts[i].thumb) {
-      // determine if this point is inside the frame
-      var p = points.positions[i];
-      if (
-        p[0] >= bounds.x[0] &&
-        p[0] <= bounds.x[1] &&
-        p[1] >= bounds.y[0] &&
-        p[1] <= bounds.y[1]
-      ) {
-        // create the detail object
-        var screen = worldToScreenCoords({x: p[0], y: p[1]})
-        var d = {
-          x: screen.x,
-          y: screen.y,
-          width: this.size,
-          height: this.size,
-          idx: i,
-        }
-        // determine if this detail overlaps others
-        var overlaps = false;
-        for (var j=0; j<this.displayed.length; j++) {
-          var o = this.displayed[j];
-          if (
-            intersects(d, o, 'x', 'width') &&
-            intersects(d, o, 'y', 'height')
-          ) {
-            overlaps = true;
-            break;
-          }
-        }
-        if (!overlaps) {
-          // add the rendered HTML content if the image can be loaded
-          var url = points.texts[i].thumb;
-          d.elem = document.createElement('div');
-          d.elem.style.backgroundImage = `url("${url}")`;
-          d.elem.className = 'detail-display';
-          d.elem.id = 'detail-' + d.idx;
-          d.elem.style.left = d.x + 'px';
-          d.elem.style.top = d.y + 'px';
-          d.elem.style.height = d.height + 'px';
-          d.elem.style.width = d.width + 'px';
-          d.elem.style.animationDelay = Math.random() * 2.0 + 's';
-          d.elem.onclick = function(i, e) {
-            picker.showItem(i);
-            e.stopPropagation();
-          }.bind(this, i);
-          // add the point to the set of rendered points
-          this.displayed.push(d);
-        }
-      }
-    }
+    if (this.selected.length === this.n) break;
+    // skip cells without images
+    if (!points.texts[i].thumb) continue;
+    // create the cell object
+    var world = {x: points.positions[i][0], y: points.positions[i][1]};
+    var screen = worldToScreenCoords(world);
+    var d = {
+      x: screen.x,
+      y: screen.y,
+      width: this.size,
+      height: this.size,
+      index: i,
+    };
+    // if the point is visible and doesn't overlap with others, add it
+    if (
+      world.x >= bounds.x[0] &&
+      world.x <= bounds.x[1] &&
+      world.y >= bounds.y[0] &&
+      world.y <= bounds.y[1] &&
+      !(this.overlaps(d))
+    ) this.selected.push(this.formatDetail(d))
   }
 }
 
+// a & b are objects with x,y attrs; p == x|y; s == width|height; margin = space between objects
+Details.prototype.intersects = function(a, b, p, s, margin=10) {
+  var a0 = a[p];
+  var b0 = b[p];
+  var a1 = a[p] + a[s] + margin;
+  var b1 = b[p] + b[s] + margin;
+  return a0 >= b0 && a0 <= b1 ||
+         a1 >= b0 && a1 <= b1;
+}
+
+// given point d with attributes x, y determine if it overlaps other selected points
+Details.prototype.overlaps = function(d) {
+  for (var j=0; j<this.selected.length; j++) {
+    if (
+      this.intersects(d, this.selected[j], 'x', 'width') &&
+      this.intersects(d, this.selected[j], 'y', 'height')
+    ) return true;
+  }
+  return false;
+}
+
+Details.prototype.formatDetail = function(d) {
+  var url = points.texts[d.index].thumb;
+  d.elem = document.createElement('div');
+  d.elem.style.backgroundImage = `url("${url}")`;
+  d.elem.className = 'detail-display';
+  d.elem.id = 'detail-' + d.index;
+  d.elem.style.left = d.x + 'px';
+  d.elem.style.top = d.y + 'px';
+  d.elem.style.height = d.height + 'px';
+  d.elem.style.width = d.width + 'px';
+  d.elem.style.animationDelay = Math.random() * 2.0 + 's';
+  d.elem.onmousedown = function(d, e) {
+    tooltip.display(d.index);
+    e.stopPropagation();
+  }.bind(this, d);
+  return d;
+}
+
 Details.prototype.render = function() {
-  this.displayed.forEach(function(d) {
-    document.body.appendChild(d.elem);
+  var elem = document.querySelector('#details-container');
+  this.selected.forEach(function(d) {
+    elem.appendChild(d.elem);
   })
 }
 
 Details.prototype.clear = function() {
-  if (!this.displayed.length) return;
-  this.displayed.forEach(function(d) {
+  if (!this.selected.length) return;
+  this.selected.forEach(function(d) {
     var elem = d.elem;
     elem.parentNode.removeChild(elem);
   })
-  this.displayed = [];
+  this.selected = [];
 }
 
 Details.prototype.redraw = function() {
@@ -629,26 +628,30 @@ Details.prototype.redraw = function() {
 
 // measure the delta between e and the position of this.mouse
 Details.prototype.measureMouseMovement = function(e) {
+  var p = getEventClientCoords(e);
   return {
-    x: Math.abs(this.mouse.x - e.clientX),
-    y: Math.abs(this.mouse.y - e.clientY),
+    x: Math.abs(this.mouse.x - p.x),
+    y: Math.abs(this.mouse.y - p.y),
   }
 }
 
 Details.prototype.addEventListeners = function() {
 
   window.addEventListener('mousedown', function(e) {
+    var p = getEventClientCoords(e);
     this.mouse.down = true;
-    this.mouse.x = e.clientX;
-    this.mouse.y = e.clientY;
+    this.mouse.x = p.x;
+    this.mouse.y = p.y;
   }.bind(this))
 
   window.addEventListener('mousemove', function(e) {
     if (this.mouse.down) {
-      this.mouse.dragging = true;
       // if the user has dragged too far clear
       var d = this.measureMouseMovement(e);
-      if (d.x > 1 || d.y > 1) this.clear();
+      if (d.x > 2 || d.y > 2) {
+        this.mouse.dragging = true;
+        this.clear();
+      }
     }
   }.bind(this))
 
@@ -681,6 +684,244 @@ Details.prototype.addEventListeners = function() {
 }
 
 /**
+ * Lasso
+ **/
+
+/**
+* 2D convex hull via https://github.com/brian3kb/graham_scan_js
+**/
+
+function Lasso() {
+  this.clock = new THREE.Clock(); // clock for animating polyline
+  this.time = 0; // time counter for animating polyline
+  this.points = []; // array of {x: y: } point objects tracing user polyline
+  this.enabled = false; // boolean indicating if any actions on the lasso are permitted
+  this.capturing = false; // boolean indicating if we're recording mousemoves
+  this.frozen = false; // boolean indicating whether to listen to mouse events
+  this.mesh = null; // the rendered polyline outlining user selection
+  this.selected = {}; // d[cell idx] = bool indicating if selected
+  this.displayed = false; // bool indicating whether the modal is displayed
+  this.mousedownCoords = {}; // obj storing x, y, z coords of mousedown
+  this.addEventListeners();
+}
+
+Lasso.prototype.addEventListeners = function() {
+  window.addEventListener('mousedown', this.handleMouseDown.bind(this));
+  window.addEventListener('touchstart', this.handleMouseDown.bind(this));
+
+  window.addEventListener('mousemove', this.handleMouseMove.bind(this));
+  window.addEventListener('touchmove', this.handleMouseMove.bind(this));
+
+  window.addEventListener('mouseup', this.handleMouseUp.bind(this));
+  window.addEventListener('touchend', this.handleMouseUp.bind(this));
+}
+
+Lasso.prototype.handleMouseDown = function(e) {
+  if (!this.enabled) return;
+  this.mousedownCoords = getEventClientCoords(e);
+  this.setCapturing(true);
+  this.setFrozen(false);
+}
+
+Lasso.prototype.handleMouseMove = function(e) {
+  if (!this.capturing || this.frozen) return;
+  if (!this.isLassoEvent(e)) return;
+  this.points.push(getEventWorldCoords(e));
+  this.draw();
+}
+
+Lasso.prototype.handleMouseUp = function(e) {
+  if (!this.enabled) return;
+  // prevent the lasso points from changing
+  this.setFrozen(true);
+  // if the user registered a click, clear the lasso
+  var coords = getEventClientCoords(e);
+  if (coords.x == this.mousedownCoords.x &&
+      coords.y == this.mousedownCoords.y &&
+      !keyboard.shiftPressed() &&
+      !keyboard.commandPressed()) {
+    this.clear();
+  }
+  // do not turn off capturing if the user is clicking the lasso symbol
+  if (!e.target.id || e.target.id == 'select') return;
+  // prevent the lasso from updating its points boundary
+  this.setCapturing(false);
+}
+
+
+function ConvexHullGrahamScan() {
+  this.anchorPoint = undefined;
+  this.reverse = false;
+  this.points = [];
+}
+
+ConvexHullGrahamScan.prototype = {
+  constructor: ConvexHullGrahamScan,
+
+  Point: function (x, y) {
+    this.x = x;
+    this.y = y;
+  },
+
+  _findPolarAngle: function (a, b) {
+    var ONE_RADIAN = 57.295779513082;
+    var deltaX, deltaY;
+    // if the points are undefined, return a zero difference angle.
+    if (!a || !b) return 0;
+    deltaX = (b.x - a.x);
+    deltaY = (b.y - a.y);
+    if (deltaX == 0 && deltaY == 0) return 0;
+    var angle = Math.atan2(deltaY, deltaX) * ONE_RADIAN;
+    if (this.reverse) {
+      if (angle <= 0) angle += 360;
+    } else {
+      if (angle >= 0) angle += 360;
+    }
+    return angle;
+  },
+
+  addPoint: function (x, y) {
+    // check for a new anchor
+    var newAnchor =
+      ( this.anchorPoint === undefined ) ||
+      ( this.anchorPoint.y > y ) ||
+      ( this.anchorPoint.y === y && this.anchorPoint.x > x );
+    if ( newAnchor ) {
+      if ( this.anchorPoint !== undefined ) {
+        this.points.push(new this.Point(this.anchorPoint.x, this.anchorPoint.y));
+      }
+      this.anchorPoint = new this.Point(x, y);
+    } else {
+      this.points.push(new this.Point(x, y));
+    }
+  },
+
+  _sortPoints: function () {
+    var self = this;
+    return this.points.sort(function (a, b) {
+      var polarA = self._findPolarAngle(self.anchorPoint, a);
+      var polarB = self._findPolarAngle(self.anchorPoint, b);
+      if (polarA < polarB) return -1;
+      if (polarA > polarB) return 1;
+      return 0;
+    });
+  },
+
+  _checkPoints: function (p0, p1, p2) {
+    var difAngle;
+    var cwAngle = this._findPolarAngle(p0, p1);
+    var ccwAngle = this._findPolarAngle(p0, p2);
+    if (cwAngle > ccwAngle) {
+      difAngle = cwAngle - ccwAngle;
+      return !(difAngle > 180);
+    } else if (cwAngle < ccwAngle) {
+      difAngle = ccwAngle - cwAngle;
+      return (difAngle > 180);
+    }
+    return true;
+  },
+
+  getHull: function () {
+    var hullPoints = [],
+        points,
+        pointsLength;
+    this.reverse = this.points.every(function(point) {
+      return (point.x < 0 && point.y < 0);
+    });
+    points = this._sortPoints();
+    pointsLength = points.length;
+    // if there are less than 3 points, joining these points creates a correct hull.
+    if (pointsLength < 3) {
+      points.unshift(this.anchorPoint);
+      return points;
+    }
+    // move first two points to output array
+    hullPoints.push(points.shift(), points.shift());
+    // scan is repeated until no concave points are present.
+    while (true) {
+      var p0,
+          p1,
+          p2;
+      hullPoints.push(points.shift());
+      p0 = hullPoints[hullPoints.length - 3];
+      p1 = hullPoints[hullPoints.length - 2];
+      p2 = hullPoints[hullPoints.length - 1];
+      if (this._checkPoints(p0, p1, p2)) {
+        hullPoints.splice(hullPoints.length - 2, 1);
+      }
+      if (points.length == 0) {
+        if (pointsLength == hullPoints.length) {
+          // check for duplicate anchorPoint edge-case, if not found, add the anchorpoint as the first item.
+          var ap = this.anchorPoint;
+          // remove any udefined elements in the hullPoints array.
+          hullPoints = hullPoints.filter(function(p) { return !!p; });
+          if (!hullPoints.some(function(p) {
+              return (p.x == ap.x && p.y == ap.y);
+            })) {
+            hullPoints.unshift(this.anchorPoint);
+          }
+          return hullPoints;
+        }
+        points = hullPoints;
+        pointsLength = points.length;
+        hullPoints = [];
+        hullPoints.push(points.shift(), points.shift());
+      }
+    }
+  }
+};
+
+/**
+ * One listener for all mouse events
+ **/
+
+function Mouse() {
+  this.x = 0;
+  this.y = 0;
+  this.mouseDown = null;
+  this.dragging = false;
+  this.addEventListeners();
+}
+
+Mouse.prototype.addEventListeners = function() {
+
+  window.addEventListener('mousemove', function(e) {
+    var p = getEventClientCoords(e);
+    this.x = p.x;
+    this.y = p.y;
+    this.dragging = this.mouseDown && (
+      Math.abs(this.x - this.mouseDown.x) > 1 ||
+      Math.abs(this.y - this.mouseDown.y) > 1
+    ) ? true : false;
+    e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
+  }.bind(this))
+
+  window.addEventListener('mousedown', function(e) {
+    this.mouseDown = getEventClientCoords(e);
+    e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
+  }.bind(this))
+
+  // reset dragging after propagation so mouseup knows if we're finishing a drag
+  window.addEventListener('mouseup', function(e) {
+    e.target.dispatchEvent(new CustomEvent('trails-mouseup', this.getEventMeta(e)));
+    this.dragging = false;
+    this.mouseDown = null;
+  }.bind(this))
+
+}
+
+Mouse.prototype.getEventMeta = function(e) {
+  return {
+    bubbles: true,
+    detail: {
+      e: e,
+      dragging: this.dragging,
+      pos: getEventClientCoords(e),
+    }
+  }
+}
+
+/**
  * Utils
  **/
 
@@ -689,6 +930,25 @@ function getCanvasSize() {
   return {
     w: container.clientWidth,
     h: container.clientHeight,
+  }
+}
+
+function getEventClientCoords(e) {
+  return {
+    x: e.touches && e.touches[0] && 'clientX' in e.touches[0]
+      ? e.touches[0].clientX
+      : e.changedTouches && e.changedTouches[0] && 'clientX' in e.changedTouches[0]
+      ? e.changedTouches[0].clientX
+      : e.clientX
+      ? e.clientX
+      : e.pageX,
+    y: e.touches && e.touches[0] && 'clientY' in e.touches[0]
+      ? e.touches[0].clientY
+      : e.changedTouches && e.changedTouches[0] && 'clientY' in e.changedTouches[0]
+      ? e.changedTouches[0].clientY
+      : e.clientY
+      ? e.clientY
+      : e.pageY,
   }
 }
 
@@ -760,6 +1020,7 @@ var points = new Points();
 var tooltip = new Tooltip();
 var stats = new Stats();
 var details = new Details();
+var mouse = new Mouse();
 
 touchtexture.init();
 points.init();
