@@ -1,6 +1,9 @@
 /**
  * TODO:
  *  - recently viewed list
+ *  - quadtree to expedite search for previews after zooming in
+ *  - improve touchtexture sizing when zoomed in
+ *  -
  **/
 
 var dpi = window.devicePixelRatio || 1;
@@ -150,8 +153,82 @@ Points.prototype.init = function() {
 
 Points.prototype.getMaterial = function() {
   return new THREE.RawShaderMaterial({
-    vertexShader: document.getElementById('vertex-shader').textContent,
-    fragmentShader: document.getElementById('fragment-shader').textContent,
+    vertexShader: `
+      precision highp float;
+
+      uniform mat4 modelViewMatrix;
+      uniform mat4 projectionMatrix;
+      uniform vec3 cameraPosition;
+      uniform float dpi;
+      uniform float height;
+      uniform sampler2D touchtexture;
+
+      attribute vec3 position;
+      attribute vec3 translation;
+      attribute vec3 color;
+      attribute vec3 clickColor;
+
+      varying vec3 vColor;
+      varying vec3 vClickColor;
+      varying float vSize;
+
+      void main() {
+        // position and project the point
+        vec4 mvPosition = modelViewMatrix * vec4(position + translation, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+
+        // convert gl_Position to 0:1 on each axis for touchtexture lookups
+        float x = (gl_Position.x + cameraPosition.z) / (2.0 * cameraPosition.z);
+        float y = (gl_Position.y + cameraPosition.z) / (2.0 * cameraPosition.z);
+
+        // scale the point size by the device DPI and window height
+        gl_PointSize = 0.0004 * dpi * height / -mvPosition.z;
+
+        // adjust the point size based on the touchtexture
+        vec4 brightness = texture2D(touchtexture, vec2(x, y));
+        float touchSize = gl_PointSize * 200.0 * brightness.r * cameraPosition.z;
+        // scale point size with touch texture
+        gl_PointSize = max(gl_PointSize, touchSize);
+        // set min point size
+        gl_PointSize = max(gl_PointSize, 1.0);
+        // set max point size
+        gl_PointSize = min(gl_PointSize, 40.0);
+
+        // pass varyings
+        vColor = color;
+        vClickColor = clickColor;
+        vSize = gl_PointSize;
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+
+      uniform sampler2D grit;
+      uniform float useColor;
+      uniform float useNightMode;
+
+      varying vec3 vColor;
+      varying vec3 vClickColor;
+      varying float vSize;
+
+      void red() {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+      }
+
+      void main() {
+        // get point shape
+        if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
+
+        if (useNightMode > 0.5) {
+          gl_FragColor = vec4(vColor, 1.0);
+        } else {
+          gl_FragColor = texture2D(grit, gl_PointCoord * vSize / 200.0); // grit
+        }
+
+        // overwrite colors if we're GPU picking
+        if (useColor > 0.5) gl_FragColor = vec4(vClickColor, 1.0);
+      }
+    `,
     uniforms: {
       height: {
         type: 'f',
