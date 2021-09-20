@@ -3,7 +3,9 @@
  *  - recently viewed list
  *  - quadtree to expedite search for previews after zooming in
  *  - improve touchtexture sizing when zoomed in
- *  -
+ *  - set attribute of so points with previews have large size in gl
+ *  - show name when hovering
+ *  - prevent oval shaped size increase with rectangular viewports
  **/
 
 var dpi = window.devicePixelRatio || 1;
@@ -51,6 +53,7 @@ World.prototype.resize = function() {
   world.controls.handleResize();
   if (picker.initialized) picker.tex.setSize(w, h);
   if (points.initialized) points.mesh.material.uniforms.height.value = window.innerHeight;
+  if (points.initialized) points.mesh.material.uniforms.width.value = window.innerWidth;
   if (picker.initialized) picker.mesh.material.uniforms.height.value = window.innerHeight;
   world.composer.reset();
 }
@@ -161,6 +164,7 @@ Points.prototype.getMaterial = function() {
       uniform vec3 cameraPosition;
       uniform float dpi;
       uniform float height;
+      uniform float width;
       uniform sampler2D touchtexture;
 
       attribute vec3 position;
@@ -192,7 +196,7 @@ Points.prototype.getMaterial = function() {
         // set min point size
         gl_PointSize = max(gl_PointSize, 1.0);
         // set max point size
-        gl_PointSize = min(gl_PointSize, 40.0);
+        gl_PointSize = min(gl_PointSize, 20.0);
 
         // pass varyings
         vColor = color;
@@ -233,6 +237,10 @@ Points.prototype.getMaterial = function() {
       height: {
         type: 'f',
         value: world.renderer.domElement.clientHeight,
+      },
+      width: {
+        type: 'f',
+        value: world.renderer.domElement.clientWidth,
       },
       dpi: {
         type: 'f',
@@ -386,7 +394,7 @@ TouchTexture.prototype.addPoint = function(point) {
   if (last) {
     var dx = last.x - point.x;
     var dy = last.y - point.y;
-    var dd = dx * dx + dy * dy;
+    var dd = dx**2 + dy**2;
     force = Math.min(dd * 10000, this.maxForce);
   }
   this.trail.push({
@@ -395,31 +403,6 @@ TouchTexture.prototype.addPoint = function(point) {
     age: 0,
     force,
   });
-}
-
-TouchTexture.prototype.addEventListeners = function() {
-  this.mouseMoveElem.addEventListener('mousemove', this.handleMouseMove.bind(this));
-}
-
-TouchTexture.prototype.handleMouseMove = function(e) {
-  var elem = this.mouseMoveElem;
-  var w = elem.clientWidth;
-  var h = elem.clientHeight;
-  // get the initial, unnormalized point coords
-  var p = getEventClientCoords(e);
-  // convert x,y to positions within canvas (instead of positions within document/window)
-  var elem = e.target;
-  while (elem && elem.tag && elem.tag != 'html') {
-    var box = elem.getBoundingClientRect();
-    p.x -= box.left;
-    p.y -= box.top;
-    elem = elem.parentNode;
-  }
-  // normalize the point coords
-  p.x = p.x / w;
-  p.y = (h-p.y) / h;
-  this.addPoint(p);
-  this.mouse = p;
 }
 
 TouchTexture.prototype.drawPoint = function(point) {
@@ -449,7 +432,7 @@ TouchTexture.prototype.drawCursor = function() {
     x: this.mouse.x * this.size,
     y: (1 - this.mouse.y) * this.size
   };
-  var radius = this.cursorRadius * this.size;
+  var radius = this.cursorRadius * this.size * 0.3 / world.camera.position.z;
   // create a gradient with diameter s
   var gradient = this.ctx.createRadialGradient(pos.x, pos.y, radius * 0.001, pos.x, pos.y, radius);
   gradient.addColorStop(0, `rgba(255, 255, 255, 1.0)`);
@@ -458,6 +441,31 @@ TouchTexture.prototype.drawCursor = function() {
   this.ctx.fillStyle = gradient;
   this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
   this.ctx.fill();
+}
+
+TouchTexture.prototype.handleMouseMove = function(e) {
+  var elem = this.mouseMoveElem;
+  var w = elem.clientWidth;
+  var h = elem.clientHeight;
+  // get the initial, unnormalized point coords
+  var p = getEventClientCoords(e);
+  // convert x,y to positions within canvas (instead of positions within document/window)
+  var elem = e.target;
+  while (elem && elem.tag && elem.tag != 'html') {
+    var box = elem.getBoundingClientRect();
+    p.x -= box.left;
+    p.y -= box.top;
+    elem = elem.parentNode;
+  }
+  // normalize the point coords
+  p.x = p.x / w;
+  p.y = (h-p.y) / h;
+  this.addPoint(p);
+  this.mouse = p;
+}
+
+TouchTexture.prototype.addEventListeners = function() {
+  this.mouseMoveElem.addEventListener('mousemove', this.handleMouseMove.bind(this));
 }
 
 /**
@@ -559,7 +567,12 @@ Tooltip.prototype.getHTML = function(index) {
 Tooltip.prototype.addEventListeners = function() {
   document.querySelector('#tooltip').addEventListener('mousemove', function(e) {
     e.stopPropagation();
-  }.bind(this))
+  }.bind(this));
+
+  document.querySelector('#tooltip').addEventListener('wheel', function(e) {
+    e.stopPropagation();
+  }.bind(this));
+
   world.renderer.domElement.addEventListener('mousemove', function(e) {
     this.close();
   }.bind(this))
@@ -612,11 +625,13 @@ Preview.prototype.select = function() {
       this.selected.push(d);
     }
   }
-  // render the selected ids
+  // render the selected ids; use documentfragment to prevent reflow after each child is added
   var elem = document.querySelector('#previews-container');
+  var children = document.createDocumentFragment();
   this.selected.forEach(function(d) {
-    elem.appendChild(d.elem);
+    children.appendChild(d.elem);
   })
+  elem.appendChild(children);
 }
 
 // a & b are objects with x,y attrs; d == x|y
@@ -642,6 +657,7 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getHTML = function(index) {
+  if (!points.texts) return;
   var url = points.texts[index].thumb;
   var div = document.createElement('div');
   div.style.backgroundImage = `url("${url}")`;
@@ -650,18 +666,24 @@ Preview.prototype.getHTML = function(index) {
   div.style.height = this.size + 'px';
   div.style.width = this.size + 'px';
   div.onmousedown = function(index, e) {
+    // mousemove events are paused while hovering previews, so set mouse coords before showing tooltip
+    mouse.set(e);
     tooltip.display(index);
     e.stopPropagation();
+  }.bind(this, index);
+  div.onmousemove = function(index, e) {
+    this.setHovered(index);
+    // stop propagation to prevent the picker from selecting an adjacent cell
+    e.stopPropagation();
+    // pass this event to the touchtexture to facilitate trails
+    touchtexture.handleMouseMove(e);
   }.bind(this, index);
   return div;
 }
 
 Preview.prototype.clear = function() {
   if (!this.selected.length) return;
-  this.selected.forEach(function(d) {
-    var elem = d.elem;
-    elem.parentNode.removeChild(elem);
-  })
+  document.querySelector('#previews-container').innerHTML = '';
   document.querySelector('#hovered-preview').innerHTML = '';
   this.hovered = null;
   this.selected = [];
@@ -688,6 +710,51 @@ Preview.prototype.measureMouseMovement = function(e) {
   }
 }
 
+// display the hovered cell
+Preview.prototype.setHovered = function(id) {
+  // prevent consecutive hovering selections
+  clearTimeout(this.mouseTimeout)
+  // bail if we're being asked to show the cell we're already showing
+  if (id === this.hovered) return;
+  this.hovered = id;
+  // if the id is -1 clear the hovered cell
+  if (id === -1) {
+    document.querySelector('#hovered-preview').innerHTML = '';
+  // else if the id is in this.selected, just add the pulse
+  } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
+    // set mouse offscreen to prevent touchtexture focus on point border
+    mouse.set({x: -1000, y: -1000});
+    document.querySelector('#preview-' + id).classList.add('pulse');
+    document.querySelector('#hovered-preview').innerHTML = '';
+  // otherwise create the element
+  } else {
+    // otherwise show this cell
+    var elem = this.getHTML(id);
+    elem.style.left = mouse.x + 'px';
+    elem.style.top = mouse.y + 'px';
+    elem.classList.add('pulse');
+    document.querySelector('#hovered-preview').innerHTML = '';
+    document.querySelector('#hovered-preview').appendChild(elem);
+  }
+  // shrink cells close to the mouse
+  this.adjustStates();
+}
+
+// adjust the size of previews near the mouse
+Preview.prototype.adjustStates = function() {
+  var overlapping = [];
+  var pos = Object.assign({}, mouse);
+  for (var i=0; i<this.selected.length; i++) {
+    (
+      this.intersects(pos, this.selected[i], 'x') &&
+      this.intersects(pos, this.selected[i], 'y') &&
+      this.selected[i].index !== this.hovered
+    )
+      ? this.shrink(this.selected[i].index)
+      : this.enlarge(this.selected[i].index);
+  }
+}
+
 // shrink the size of a preview given the cell id
 Preview.prototype.shrink = function(id) {
   var elem = document.querySelector('#preview-' + id);
@@ -702,41 +769,9 @@ Preview.prototype.enlarge = function(id) {
   if (elem.classList.contains('small')) {
     elem.classList.remove('small');
   }
-}
-
-// display the hovered cell
-Preview.prototype.setHovered = function(id) {
-  // bail if we're being asked to show the cell we're already showing
-  if (id === this.hovered) return;
-  this.hovered = id;
-  // if the id is -1 clear the hovered cell
-  if (id === -1) {
-    document.querySelector('#hovered-preview').innerHTML = '';
-  } else {
-    // otherwise show this cell
-    var elem = this.getHTML(id);
-    elem.style.left = mouse.x + 'px';
-    elem.style.top = mouse.y + 'px';
-    elem.classList.add('pulse');
-    document.querySelector('#hovered-preview').innerHTML = '';
-    document.querySelector('#hovered-preview').appendChild(elem);
-  }
-  // shrink cells close to the mouse
-  this.adjustSizes();
-}
-
-// adjust the size of previews near the mouse
-Preview.prototype.adjustSizes = function() {
-  var overlapping = [];
-  var pos = Object.assign({}, mouse);
-  for (var i=0; i<this.selected.length; i++) {
-    (
-      this.intersects(pos, this.selected[i], 'x') &&
-      this.intersects(pos, this.selected[i], 'y')
-    )
-      ? this.shrink(this.selected[i].index)
-      : this.enlarge(this.selected[i].index);
-  }
+  // add / remove the pulse class
+  if (this.hovered === id) elem.classList.add('pulse');
+  else elem.classList.remove('pulse');
 }
 
 Preview.prototype.addEventListeners = function() {
@@ -755,7 +790,7 @@ Preview.prototype.addEventListeners = function() {
       window.clearTimeout(this.mouseTimeout);
       this.mouseTimeout = setTimeout(function() {
         this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
-      }.bind(this), 50)
+      }.bind(this), 100)
     }
   }.bind(this))
 
@@ -985,9 +1020,7 @@ function Mouse() {
 Mouse.prototype.addEventListeners = function() {
 
   window.addEventListener('mousemove', function(e) {
-    var p = getEventClientCoords(e);
-    this.x = p.x;
-    this.y = p.y;
+    this.set(e);
     this.dragging = this.down && (
       Math.abs(this.x - this.down.x) > 1 ||
       Math.abs(this.y - this.down.y) > 1
@@ -1018,6 +1051,12 @@ Mouse.prototype.getEventMeta = function(e) {
       pos: getEventClientCoords(e),
     }
   }
+}
+
+Mouse.prototype.set = function(e) {
+  var p = getEventClientCoords(e);
+  this.x = p.x;
+  this.y = p.y;
 }
 
 /**
