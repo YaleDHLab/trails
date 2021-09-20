@@ -48,29 +48,61 @@ body.night-mode {
 }
 
 /**
-* Detail Display
+* Preview
 **/
 
-.detail-display {
+.preview {
   position: absolute;
   z-index: 10;
   background-color: #ddd;
   background-image: none;
   background-size: cover;
   background-position: center top;
-  border: 1px solid #000;
+  border: 1px solid #555;
   border-radius: 100%;
   opacity: 1;
   animation-name: increase-scale;
   animation-duration: 0.6s;
   animation-fill-mode: forwards;
   animation-timing-function: cubic-bezier(.22,1.16,.69,1.28);
-  transform: translate(-50%, -50%) scale(0.1);
+  transform: translate(-50%, -50%) scale(0.01);
+}
+
+.preview.small {
+  animation-name: decrease-scale;
+  animation-delay: 0s !important;
+}
+
+.preview.pulse {
+  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+}
+
+.preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(assets/images/particle-texture.jpg);
+  opacity: 0.2;
+  border-radius: 100%;
+  background-size: 140px;
+  background-repeat: no-repeat;
 }
 
 /**
  * Keyframes
  **/
+
+@keyframes decrease-scale {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+}
 
 @keyframes increase-scale {
   0% {
@@ -101,6 +133,18 @@ body.night-mode {
   }
 }
 
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
 /**
 * Tooltip
 **/
@@ -113,7 +157,22 @@ body.night-mode {
 }
 
 /**
- * Wikipedia Bio Tooltip
+ * Tooltip Hover
+ **/
+
+.tooltip-hover {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #555;
+  border-radius: 100%;
+  background-size: cover;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.1);
+  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+}
+
+/**
+ * Tooltip Click: Wikipedia Bio
  **/
 
 .wiki-bio {

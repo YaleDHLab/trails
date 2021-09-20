@@ -1,3 +1,8 @@
+/**
+ * TODO:
+ *  - recently viewed list
+ **/
+
 var dpi = window.devicePixelRatio || 1;
 
 /**
@@ -42,7 +47,6 @@ World.prototype.resize = function() {
   world.renderer.setSize(w, h, false);
   world.controls.handleResize();
   if (picker.initialized) picker.tex.setSize(w, h);
-  if (touchtexture.initialized) touchtexture.handleResize();
   if (points.initialized) points.mesh.material.uniforms.height.value = window.innerHeight;
   if (picker.initialized) picker.mesh.material.uniforms.height.value = window.innerHeight;
   world.composer.reset();
@@ -58,12 +62,6 @@ World.prototype.useDayMode = function() {
   document.body.classList.remove('night-mode');
 }
 
-World.prototype.addEventListeners = function() {
-  window.addEventListener('resize', function(e) {
-    this.resize()
-  }.bind(this));
-}
-
 World.prototype.render = function() {
   requestAnimationFrame(this.render.bind(this));
   if (points.initialized && points.mesh.material.uniforms.useNightMode.value > 0.5) {
@@ -74,6 +72,12 @@ World.prototype.render = function() {
   this.controls.update();
   touchtexture.update();
   stats.update();
+}
+
+World.prototype.addEventListeners = function() {
+  window.addEventListener('resize', function(e) {
+    this.resize()
+  }.bind(this));
 }
 
 /**
@@ -87,7 +91,7 @@ Points.prototype.init = function() {
   this.initialized = false;
   this.positions = [];
   this.texts = [];
-  this.n = 150000;
+  this.n = 250000;
 
   var tooltip = document.querySelector('#tooltip'),
       point = document.querySelector('#point'),
@@ -136,9 +140,9 @@ Points.prototype.init = function() {
     world.scene.add(this.mesh);
     // initialize downstream layers that depend on this mesh
     picker.init();
-    details.timeout = setTimeout(function() {
-      details.redraw();
-    }.bind(details), 1000)
+    preview.timeout = setTimeout(function() {
+      preview.redraw();
+    }.bind(preview), 1000)
     // flip the initialization bool
     this.initialized = true;
   })
@@ -242,67 +246,6 @@ function interpolateArray(scaleArr) {
 var cmap = interpolateArray(colors);
 
 /**
-* Picker
-**/
-
-function Picker() {
-  this.mesh = null;
-  this.scene = new THREE.Scene();
-  this.scene.background = new THREE.Color(0x000000);
-  this.tex = this.getTexture();
-  this.initialized = false;
-  this.selectedIndex = -1;
-}
-
-// get the mesh in which to render picking elements
-Picker.prototype.init = function() {
-  this.addEventListeners();
-  this.mesh = points.mesh.clone();
-  var material = points.getMaterial();
-  material.uniforms.useColor.value = 1.0;
-  this.mesh.material = material;
-  this.scene.add(this.mesh);
-  this.initialized = true;
-}
-
-Picker.prototype.addEventListeners = function() {
-  window.addEventListener('trails-mousedown', function(e) {
-    if (e.detail.dragging) return;
-    var index = this.select(e.detail.pos);
-    if (index !== -1) {
-      tooltip.display(index);
-    }
-  }.bind(this));
-}
-
-// get the texture on which off-screen rendering will happen
-Picker.prototype.getTexture = function() {
-  var size = getCanvasSize();
-  var tex = new THREE.WebGLRenderTarget(size.w * dpi, size.h * dpi);
-  tex.texture.minFilter = THREE.LinearFilter;
-  return tex;
-}
-
-// draw an offscreen world then reset the render target so world can update
-Picker.prototype.render = function() {
-  world.renderer.setRenderTarget(this.tex);
-  world.renderer.render(this.scene, world.camera);
-  world.renderer.setRenderTarget(null);
-}
-
-Picker.prototype.select = function(obj) {
-  this.render();
-  // read the texture color at the current mouse pixel
-  var pixelBuffer = new Uint8Array(4),
-      x = obj.x * dpi,
-      y = this.tex.height - obj.y * dpi;
-  world.renderer.readRenderTargetPixels(this.tex, x, y, 1, 1, pixelBuffer);
-  var id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]),
-      cellIdx = id-1; // ids use id+1 as the id of null selections is 0
-  return cellIdx;
-}
-
-/**
  * TouchTexture
  **/
 
@@ -311,9 +254,7 @@ function easeOutSine (t, b, c, d) {
   return c * Math.sin(t/d * (Math.PI/2)) + b;
 };
 
-function TouchTexture() {}
-
-TouchTexture.prototype.init = function() {
+function TouchTexture() {
   this.initialized = false;
   this.size = 512; // smaller is more performant but more susceptible to unit quantization issues
   this.maxAge = 40; // length of trail
@@ -322,16 +263,11 @@ TouchTexture.prototype.init = function() {
   this.maxForce = 0.4; // max amount of momentum in big gestures
   this.frozen = false;
   this.mouse = {x: 0, y: 0};
-  this.renderCanvas = false;
+  this.mouseMoveElem = document.body;
+  this.renderCanvas = true;
   this.trail = [];
   this.setTexture();
-  this.mouseMoveElem = document.body;
   this.addEventListeners();
-}
-
-TouchTexture.prototype.handleResize = function() {
-  this.mouseMoveElem.removeEventListener('mousemove', this.handleMouseMove.bind(this));
-  this.init();
 }
 
 TouchTexture.prototype.setTexture = function() {
@@ -448,36 +384,79 @@ TouchTexture.prototype.drawCursor = function() {
 }
 
 /**
+* Picker
+**/
+
+function Picker() {
+  this.mesh = null;
+  this.scene = new THREE.Scene();
+  this.scene.background = new THREE.Color(0x000000);
+  this.tex = this.getTexture();
+  this.initialized = false;
+  this.selectedIndex = -1;
+}
+
+// get the mesh in which to render picking elements
+Picker.prototype.init = function() {
+  this.mesh = points.mesh.clone();
+  var material = points.getMaterial();
+  material.uniforms.useColor.value = 1.0;
+  this.mesh.material = material;
+  this.scene.add(this.mesh);
+  this.initialized = true;
+}
+
+// get the texture on which off-screen rendering will happen
+Picker.prototype.getTexture = function() {
+  var size = getCanvasSize();
+  var tex = new THREE.WebGLRenderTarget(size.w * dpi, size.h * dpi);
+  tex.texture.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// draw an offscreen world then reset the render target so world can update
+Picker.prototype.render = function() {
+  world.renderer.setRenderTarget(this.tex);
+  world.renderer.render(this.scene, world.camera);
+  world.renderer.setRenderTarget(null);
+}
+
+Picker.prototype.select = function(obj) {
+  this.render();
+  // read the texture color at the current mouse pixel
+  var pixelBuffer = new Uint8Array(4),
+      x = obj.x * dpi,
+      y = this.tex.height - obj.y * dpi;
+  world.renderer.readRenderTargetPixels(this.tex, x, y, 1, 1, pixelBuffer);
+  var id = (pixelBuffer[0] << 16) | (pixelBuffer[1] << 8) | (pixelBuffer[2]),
+      cellIdx = id-1; // ids use id+1 as the id of null selections is 0
+  return cellIdx;
+}
+
+/**
  * Tooltip: displays clicked items
  **/
 
 function Tooltip() {
-  this.worldCoords = null;
+  this.timeout = null;
+  this.worldCoords = null; // store world coords of mouse
   this.target = document.querySelector('#tooltip');
-  this.displayed = -1;
-  this.addEventListeners();
+  this.displayed = null;
 }
 
-Tooltip.prototype.display = function(index, center=false) {
+// index is the cell index to show; type is hover|click
+Tooltip.prototype.display = function(index) {
+  clearTimeout(this.timeout);
+  // bail if cell metadata isn't available
+  if (!points || !points.texts.length) return;
   // bail if the user requested the item we're already showing
-  if (index == this.displayed) return;
-  // determine the x, y coords where this tooltip should be displayed
-  if (center) {
-    var pos = {
-      x: points.positions[index][0],
-      y: points.positions[index][1],
-    };
-  } else {
-    var pos = {
-      x: mouse.x,
-      y: mouse.y,
-    }
-  }
-  // to use the center of the clicked point as world coords
-  this.worldCoords = screenToWorldCoords(pos);
-  this.setPosition();
+  if (index === this.displayed) return;
   this.displayed = index;
-  this.target.innerHTML = this.getHtml(index);
+  // to use the center of the clicked point, pass points.positions[index] to screenToWorldCoords
+  this.worldCoords = screenToWorldCoords(mouse);
+  this.setPosition();
+  // get the html to display
+  this.target.innerHTML = this.getClickHtml(index)
 }
 
 Tooltip.prototype.setPosition = function() {
@@ -486,52 +465,37 @@ Tooltip.prototype.setPosition = function() {
   this.target.style.top = pos.y + 'px';
 }
 
-Tooltip.prototype.hide = function() {
+Tooltip.prototype.close = function() {
   this.displayed = -1;
   this.worldCoords = null;
   this.target.innerHTML = '';
 }
 
-Tooltip.prototype.getHtml = function(index) {
-  var metadata = points.texts[index]
-  return _.template(document.querySelector('#tooltip-template').innerHTML)({
+Tooltip.prototype.getClickHtml = function(index) {
+  var metadata = points.texts[index];
+  return _.template(document.querySelector('#tooltip-click').innerHTML)({
     index: index,
     metadata: metadata,
   });
 }
 
-Tooltip.prototype.addEventListeners = function() {
-  window.addEventListener('mousemove', function(e) {
-    this.hide();
-    //this.setPosition(worldToScreenCoords(this.worldCoords));
-  }.bind(this))
-  this.target.addEventListener('mousemove', function(e) {
-    e.stopPropagation();
-  })
-}
-
 /**
- * Details
+ * Previews
  **/
 
-function Details() {
+function Preview() {
   this.selected = [];
+  this.hovered = null;
   this.n = 50;
   this.margin = 100;
   this.size = 40;
   this.timeout = null;
-
-  this.mouse = {
-    down: false,
-    dragging: false,
-    x: null,
-    y: null,
-  };
-
+  this.mouseTimeout = null;
   this.addEventListeners();
 }
 
-Details.prototype.select = function() {
+// select the set of this.n previews to show
+Preview.prototype.select = function() {
   var bounds = getWorldBounds();
   for (var i=0; i<points.positions.length; i++) {
     // don't stop 'til you get enough
@@ -555,12 +519,23 @@ Details.prototype.select = function() {
       world.y >= bounds.y[0] &&
       world.y <= bounds.y[1] &&
       !(this.overlaps(d))
-    ) this.selected.push(this.formatDetail(d))
+    ) {
+      d.elem = this.getHTML(d.index);
+      d.elem.style.left = d.x + 'px';
+      d.elem.style.top = d.y + 'px';
+      d.elem.style.animationDelay = Math.random() * 2.0 + 's';
+      this.selected.push(d);
+    }
   }
+  // render the selected ids
+  var elem = document.querySelector('#previews-container');
+  this.selected.forEach(function(d) {
+    elem.appendChild(d.elem);
+  })
 }
 
 // a & b are objects with x,y attrs; p == x|y; s == width|height; margin = space between objects
-Details.prototype.intersects = function(a, b, p, s, margin=10) {
+Preview.prototype.intersects = function(a, b, p, s, margin=10) {
   var a0 = a[p];
   var b0 = b[p];
   var a1 = a[p] + a[s] + margin;
@@ -570,7 +545,7 @@ Details.prototype.intersects = function(a, b, p, s, margin=10) {
 }
 
 // given point d with attributes x, y determine if it overlaps other selected points
-Details.prototype.overlaps = function(d) {
+Preview.prototype.overlaps = function(d) {
   for (var j=0; j<this.selected.length; j++) {
     if (
       this.intersects(d, this.selected[j], 'x', 'width') &&
@@ -580,45 +555,37 @@ Details.prototype.overlaps = function(d) {
   return false;
 }
 
-Details.prototype.formatDetail = function(d) {
-  var url = points.texts[d.index].thumb;
-  d.elem = document.createElement('div');
-  d.elem.style.backgroundImage = `url("${url}")`;
-  d.elem.className = 'detail-display';
-  d.elem.id = 'detail-' + d.index;
-  d.elem.style.left = d.x + 'px';
-  d.elem.style.top = d.y + 'px';
-  d.elem.style.height = d.height + 'px';
-  d.elem.style.width = d.width + 'px';
-  d.elem.style.animationDelay = Math.random() * 2.0 + 's';
-  d.elem.onmousedown = function(d, e) {
-    tooltip.display(d.index);
+Preview.prototype.getHTML = function(index) {
+  var url = points.texts[index].thumb;
+  var div = document.createElement('div');
+  div.style.backgroundImage = `url("${url}")`;
+  div.className = 'preview';
+  div.id = 'preview-' + index;
+  div.style.height = this.size + 'px';
+  div.style.width = this.size + 'px';
+  div.onmousedown = function(index, e) {
+    tooltip.display(index);
     e.stopPropagation();
-  }.bind(this, d);
-  return d;
+  }.bind(this, index);
+  return div;
 }
 
-Details.prototype.render = function() {
-  var elem = document.querySelector('#details-container');
-  this.selected.forEach(function(d) {
-    elem.appendChild(d.elem);
-  })
-}
-
-Details.prototype.clear = function() {
+Preview.prototype.clear = function() {
   if (!this.selected.length) return;
   this.selected.forEach(function(d) {
     var elem = d.elem;
     elem.parentNode.removeChild(elem);
   })
+  document.querySelector('#hovered-preview').innerHTML = '';
+  this.hovered = null;
   this.selected = [];
 }
 
-Details.prototype.redraw = function() {
+Preview.prototype.redraw = function() {
   if (points.texts.length > 0) {
     this.clear();
     this.select();
-    this.render();
+  // run the initial draw once the data becomes available
   } else {
     this.timeout = setTimeout(function() {
       this.redraw();
@@ -627,43 +594,72 @@ Details.prototype.redraw = function() {
 }
 
 // measure the delta between e and the position of this.mouse
-Details.prototype.measureMouseMovement = function(e) {
+Preview.prototype.measureMouseMovement = function(e) {
   var p = getEventClientCoords(e);
   return {
-    x: Math.abs(this.mouse.x - p.x),
-    y: Math.abs(this.mouse.y - p.y),
+    x: Math.abs(mouse.down.x - p.x),
+    y: Math.abs(mouse.down.y - p.y),
   }
 }
 
-Details.prototype.addEventListeners = function() {
+// shrink the size of a preview given the cell id
+Preview.prototype.shrink = function(id) {
+  var elem = document.querySelector('#preview-' + id);
+  elem.style.animationDelay = '0s';
+  elem.classList.add('small');
+  elem.classList.remove('pulse');
+}
 
-  window.addEventListener('mousedown', function(e) {
-    var p = getEventClientCoords(e);
-    this.mouse.down = true;
-    this.mouse.x = p.x;
-    this.mouse.y = p.y;
-  }.bind(this))
+// increase the size of a preview given the cell id
+Preview.prototype.enlarge = function(id) {
+  var elem = document.querySelector('#preview-' + id);
+  elem.style.animationDelay = '0s';
+  elem.classList.remove('small');
+}
 
+// display the hovered cell
+Preview.prototype.setHovered = function(id) {
+  // bail if we're being asked to show the cell we're already showing
+  if (id === this.hovered) return;
+  this.hovered = id;
+  // if the id is -1 clear the hovered cell
+  if (id === -1) return document.querySelector('#hovered-preview').innerHTML = '';
+  // otherwise show this cell
+  var elem = this.getHTML(id);
+  elem.style.left = mouse.x + 'px';
+  elem.style.top = mouse.y + 'px';
+  elem.classList.add('pulse');
+  document.querySelector('#hovered-preview').innerHTML = '';
+  document.querySelector('#hovered-preview').appendChild(elem);
+}
+
+Preview.prototype.addEventListeners = function() {
   window.addEventListener('mousemove', function(e) {
-    if (this.mouse.down) {
+    // if the mouse is down and we're dragging, clear the board
+    if (mouse.down) {
       // if the user has dragged too far clear
       var d = this.measureMouseMovement(e);
       if (d.x > 2 || d.y > 2) {
-        this.mouse.dragging = true;
+        mouse.dragging = true;
         this.clear();
       }
+    // else check if we're hovering a cell
+    } else {
+      // once the mouse stops moving, find the hovered point (if any)
+      window.clearTimeout(this.mouseTimeout);
+      this.mouseTimeout = setTimeout(function() {
+        this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
+      }.bind(this), 50)
     }
   }.bind(this))
 
   window.addEventListener('mouseup', function(e) {
     // if the user has dragged too far clear
-    if (this.mouse.dragging) {
+    if (mouse.dragging) {
       this.timeout = setTimeout(function() {
         this.redraw();
       }.bind(this), 250)
     }
-    this.mouse.down = false;
-    this.mouse.dragging = false;
   }.bind(this))
 
   window.addEventListener('wheel', function() {
@@ -681,15 +677,12 @@ Details.prototype.addEventListeners = function() {
       this.redraw();
     }.bind(this), 200)
   }.bind(this))
+
 }
 
 /**
  * Lasso
  **/
-
-/**
-* 2D convex hull via https://github.com/brian3kb/graham_scan_js
-**/
 
 function Lasso() {
   this.clock = new THREE.Clock(); // clock for animating polyline
@@ -748,7 +741,7 @@ Lasso.prototype.handleMouseUp = function(e) {
   this.setCapturing(false);
 }
 
-
+// 2D convex hull via https://github.com/brian3kb/graham_scan_js
 function ConvexHullGrahamScan() {
   this.anchorPoint = undefined;
   this.reverse = false;
@@ -878,7 +871,7 @@ ConvexHullGrahamScan.prototype = {
 function Mouse() {
   this.x = 0;
   this.y = 0;
-  this.mouseDown = null;
+  this.down = false;
   this.dragging = false;
   this.addEventListeners();
 }
@@ -889,23 +882,23 @@ Mouse.prototype.addEventListeners = function() {
     var p = getEventClientCoords(e);
     this.x = p.x;
     this.y = p.y;
-    this.dragging = this.mouseDown && (
-      Math.abs(this.x - this.mouseDown.x) > 1 ||
-      Math.abs(this.y - this.mouseDown.y) > 1
+    this.dragging = this.down && (
+      Math.abs(this.x - this.down.x) > 1 ||
+      Math.abs(this.y - this.down.y) > 1
     ) ? true : false;
-    e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
+    //e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
   }.bind(this))
 
   window.addEventListener('mousedown', function(e) {
-    this.mouseDown = getEventClientCoords(e);
-    e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
+    this.down = getEventClientCoords(e);
+    //e.target.dispatchEvent(new CustomEvent('trails-mousedown', this.getEventMeta(e)));
   }.bind(this))
 
   // reset dragging after propagation so mouseup knows if we're finishing a drag
   window.addEventListener('mouseup', function(e) {
-    e.target.dispatchEvent(new CustomEvent('trails-mouseup', this.getEventMeta(e)));
+    //e.target.dispatchEvent(new CustomEvent('trails-mouseup', this.getEventMeta(e)));
     this.dragging = false;
-    this.mouseDown = null;
+    this.down = false;
   }.bind(this))
 
 }
@@ -1019,14 +1012,12 @@ var touchtexture = new TouchTexture();
 var points = new Points();
 var tooltip = new Tooltip();
 var stats = new Stats();
-var details = new Details();
+var preview = new Preview();
 var mouse = new Mouse();
 
-touchtexture.init();
 points.init();
 world.resize();
 world.render();
 
-// add stats
 document.body.appendChild(stats.dom);
 stats.begin();
