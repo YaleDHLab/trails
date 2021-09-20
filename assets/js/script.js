@@ -442,6 +442,7 @@ function Tooltip() {
   this.worldCoords = null; // store world coords of mouse
   this.target = document.querySelector('#tooltip');
   this.displayed = null;
+  this.addEventListeners();
 }
 
 // index is the cell index to show; type is hover|click
@@ -456,7 +457,7 @@ Tooltip.prototype.display = function(index) {
   this.worldCoords = screenToWorldCoords(mouse);
   this.setPosition();
   // get the html to display
-  this.target.innerHTML = this.getClickHtml(index)
+  this.target.innerHTML = this.getHTML(index)
 }
 
 Tooltip.prototype.setPosition = function() {
@@ -471,12 +472,20 @@ Tooltip.prototype.close = function() {
   this.target.innerHTML = '';
 }
 
-Tooltip.prototype.getClickHtml = function(index) {
-  var metadata = points.texts[index];
-  return _.template(document.querySelector('#tooltip-click').innerHTML)({
+Tooltip.prototype.getHTML = function(index) {
+  return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
-    metadata: metadata,
+    metadata: points.texts[index],
   });
+}
+
+Tooltip.prototype.addEventListeners = function() {
+  document.querySelector('#tooltip').addEventListener('mousemove', function(e) {
+    e.stopPropagation();
+  }.bind(this))
+  world.renderer.domElement.addEventListener('mousemove', function(e) {
+    this.close();
+  }.bind(this))
 }
 
 /**
@@ -626,16 +635,16 @@ Preview.prototype.setHovered = function(id) {
   // if the id is -1 clear the hovered cell
   if (id === -1) {
     document.querySelector('#hovered-preview').innerHTML = '';
-    return this.adjustSizes();
+  } else {
+    // otherwise show this cell
+    var elem = this.getHTML(id);
+    elem.style.left = mouse.x + 'px';
+    elem.style.top = mouse.y + 'px';
+    elem.classList.add('pulse');
+    document.querySelector('#hovered-preview').innerHTML = '';
+    document.querySelector('#hovered-preview').appendChild(elem);
   }
-  // otherwise show this cell
-  var elem = this.getHTML(id);
-  elem.style.left = mouse.x + 'px';
-  elem.style.top = mouse.y + 'px';
-  elem.classList.add('pulse');
-  document.querySelector('#hovered-preview').innerHTML = '';
-  document.querySelector('#hovered-preview').appendChild(elem);
-  // get the ids of selected cells that overlap the hovered cell
+  // shrink cells close to the mouse
   this.adjustSizes();
 }
 
