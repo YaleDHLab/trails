@@ -487,7 +487,7 @@ function Preview() {
   this.selected = [];
   this.hovered = null;
   this.n = 50;
-  this.margin = 100;
+  this.margin = 10;
   this.size = 40;
   this.timeout = null;
   this.mouseTimeout = null;
@@ -508,11 +508,10 @@ Preview.prototype.select = function() {
     var d = {
       x: screen.x,
       y: screen.y,
-      width: this.size,
-      height: this.size,
       index: i,
     };
     // if the point is visible and doesn't overlap with others, add it
+    if (i % 1000 == 0) console.log(i)
     if (
       world.x >= bounds.x[0] &&
       world.x <= bounds.x[1] &&
@@ -534,22 +533,23 @@ Preview.prototype.select = function() {
   })
 }
 
-// a & b are objects with x,y attrs; p == x|y; s == width|height; margin = space between objects
-Preview.prototype.intersects = function(a, b, p, s, margin=10) {
-  var a0 = a[p];
-  var b0 = b[p];
-  var a1 = a[p] + a[s] + margin;
-  var b1 = b[p] + b[s] + margin;
+// a & b are objects with x,y attrs; d == x|y
+Preview.prototype.intersects = function(a, b, d) {
+  var a0 = a[d];
+  var b0 = b[d];
+  var a1 = a[d] + this.size + this.margin;
+  var b1 = b[d] + this.size + this.margin;
   return a0 >= b0 && a0 <= b1 ||
          a1 >= b0 && a1 <= b1;
 }
 
 // given point d with attributes x, y determine if it overlaps other selected points
-Preview.prototype.overlaps = function(d) {
-  for (var j=0; j<this.selected.length; j++) {
+Preview.prototype.overlaps = function(a) {
+  for (var i=0; i<this.selected.length; i++) {
+    var b = this.selected[i];
     if (
-      this.intersects(d, this.selected[j], 'x', 'width') &&
-      this.intersects(d, this.selected[j], 'y', 'height')
+      this.intersects(a, b, 'x') &&
+      this.intersects(a, b, 'y')
     ) return true;
   }
   return false;
@@ -623,7 +623,10 @@ Preview.prototype.setHovered = function(id) {
   if (id === this.hovered) return;
   this.hovered = id;
   // if the id is -1 clear the hovered cell
-  if (id === -1) return document.querySelector('#hovered-preview').innerHTML = '';
+  if (id === -1) {
+    document.querySelector('#hovered-preview').innerHTML = '';
+    return this.adjustSizes();
+  }
   // otherwise show this cell
   var elem = this.getHTML(id);
   elem.style.left = mouse.x + 'px';
@@ -631,6 +634,22 @@ Preview.prototype.setHovered = function(id) {
   elem.classList.add('pulse');
   document.querySelector('#hovered-preview').innerHTML = '';
   document.querySelector('#hovered-preview').appendChild(elem);
+  // get the ids of selected cells that overlap the hovered cell
+  this.adjustSizes();
+}
+
+// adjust the size of previews near the mouse
+Preview.prototype.adjustSizes = function() {
+  var overlapping = [];
+  var pos = Object.assign({}, mouse);
+  for (var i=0; i<this.selected.length; i++) {
+    (
+      this.intersects(pos, this.selected[i], 'x') &&
+      this.intersects(pos, this.selected[i], 'y')
+    )
+      ? this.shrink(this.selected[i].index)
+      : this.enlarge(this.selected[i].index)
+  }
 }
 
 Preview.prototype.addEventListeners = function() {
