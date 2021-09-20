@@ -264,7 +264,7 @@ function TouchTexture() {
   this.frozen = false;
   this.mouse = {x: 0, y: 0};
   this.mouseMoveElem = document.body;
-  this.renderCanvas = true;
+  this.renderCanvas = false;
   this.trail = [];
   this.setTexture();
   this.addEventListeners();
@@ -511,7 +511,7 @@ Preview.prototype.select = function() {
       index: i,
     };
     // if the point is visible and doesn't overlap with others, add it
-    if (i % 1000 == 0) console.log(i)
+    if (i % 1000 == 0) console.log(' * crawled through', i)
     if (
       world.x >= bounds.x[0] &&
       world.x <= bounds.x[1] &&
@@ -613,8 +613,9 @@ Preview.prototype.shrink = function(id) {
 // increase the size of a preview given the cell id
 Preview.prototype.enlarge = function(id) {
   var elem = document.querySelector('#preview-' + id);
-  elem.style.animationDelay = '0s';
-  elem.classList.remove('small');
+  if (elem.classList.contains('small')) {
+    elem.classList.remove('small');
+  }
 }
 
 // display the hovered cell
@@ -648,7 +649,7 @@ Preview.prototype.adjustSizes = function() {
       this.intersects(pos, this.selected[i], 'y')
     )
       ? this.shrink(this.selected[i].index)
-      : this.enlarge(this.selected[i].index)
+      : this.enlarge(this.selected[i].index);
   }
 }
 
