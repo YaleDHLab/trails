@@ -1,7 +1,6 @@
 /**
  * TODO:
  *  - recently viewed list
- *  - quadtree to expedite search for previews after zooming in
  *  - improve touchtexture sizing when zoomed in
  *  - set attribute of so points with previews have large size in gl
  *  - show name when hovering
@@ -97,7 +96,7 @@ Points.prototype.init = function() {
   this.initialized = false;
   this.positions = [];
   this.texts = [];
-  this.n = 250000;
+  this.n = 100000;
 
   var tooltip = document.querySelector('#tooltip'),
       point = document.querySelector('#point'),
@@ -110,6 +109,7 @@ Points.prototype.init = function() {
   fetch('assets/data/positions.json').then(data => data.json()).then(json => {
     this.positions = json.positions.slice(0, this.n);
     this.colors = json.colors.slice(0, this.n);
+    preview.createIndex(this.positions);
     var clickColor = new THREE.Color(),
         clickColors = new Float32Array(this.positions.length * 3),
         colors = new Float32Array(this.positions.length * 3),
@@ -591,23 +591,30 @@ function Preview() {
   this.timeout = null;
   this.mouseTimeout = null;
   this.addEventListeners();
+  this.index = null;
+}
+
+Preview.prototype.createIndex = function(positions) {
+  this.index = new KDBush(positions);
 }
 
 // select the set of this.n previews to show
 Preview.prototype.select = function() {
   var bounds = getWorldBounds();
-  for (var i=0; i<points.positions.length; i++) {
+  var indices = this.index.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort((a, b) => a-b);
+  for (var i=0; i<indices.length; i++) {
+    var index = indices[i];
     // don't stop 'til you get enough
     if (this.selected.length === this.n) break;
     // skip cells without images
-    if (!points.texts[i].thumb) continue;
+    if (!points.texts[index].thumb) continue;
     // create the cell object
-    var world = {x: points.positions[i][0], y: points.positions[i][1]};
+    var world = {x: points.positions[index][0], y: points.positions[index][1]};
     var screen = worldToScreenCoords(world);
     var d = {
       x: screen.x,
       y: screen.y,
-      index: i,
+      index: index,
     };
     // if the point is visible and doesn't overlap with others, add it
     if (i % 1000 == 0) console.log(' * crawled through', i)
@@ -621,7 +628,7 @@ Preview.prototype.select = function() {
       d.elem = this.getHTML(d.index);
       d.elem.style.left = d.x + 'px';
       d.elem.style.top = d.y + 'px';
-      d.elem.style.animationDelay = Math.random() * 2.0 + 's';
+      d.elem.style.animationDelay = Math.random() * 1.0 + 's';
       this.selected.push(d);
     }
   }
