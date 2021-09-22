@@ -8,3 +8,4 @@
 build
 dist
 assets/data
+deploy*

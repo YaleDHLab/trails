@@ -800,6 +800,10 @@ Preview.prototype.handleMouseUp = function(e) {
     this.timeout = setTimeout(function() {
       this.redraw();
     }.bind(this), 250)
+  } else {
+    this.mouseTimeout = setTimeout(function() {
+      this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
+    }.bind(this), 300)
   }
 }
 
