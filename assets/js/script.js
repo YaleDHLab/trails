@@ -39,6 +39,7 @@ function World() {
   this.controls.target.x = start.x;
   this.controls.target.y = start.y;
   this.controls.maxDistance = 0.5;
+  this.controls.noRotate = true;
   this.addEventListeners();
 }
 
@@ -102,56 +103,69 @@ Points.prototype.init = function() {
       point = document.querySelector('#point'),
       selected = document.querySelector('#selected-point');
 
-  fetch('assets/data/texts.json').then(data => data.json()).then(json => {
-    this.texts = json;
+  Promise.all([
+    fetch('assets/data/texts.json'),
+    fetch('assets/data/positions.json'),
+  ]).then(results => {
+    const [texts, positions] = results;
+    texts.json().then(textJson => {
+      this.texts = textJson;
+      this.initialize();
+    })
+    positions.json().then(positionJson => {
+      this.positions = positionJson.positions.slice(0, this.n);
+      this.colors = positionJson.colors.slice(0, this.n);
+      preview.createIndex(this.positions);
+      var clickColor = new THREE.Color(),
+          clickColors = new Float32Array(this.positions.length * 3),
+          colors = new Float32Array(this.positions.length * 3),
+          translations = new Float32Array(this.positions.length * 3),
+          translationIterator = 0,
+          colorIterator = 0,
+          clickColorIterator = 0;
+      for (var i=0; i<this.positions.length; i++) {
+        clickColor.setHex(i + 1);
+        var color = cmap((this.colors || {})[i] || 0);
+        translations[translationIterator++] = this.positions[i][0];
+        translations[translationIterator++] = this.positions[i][1];
+        translations[translationIterator++] = 0;
+        colors[colorIterator++] = color.r;
+        colors[colorIterator++] = color.g;
+        colors[colorIterator++] = color.b;
+        clickColors[clickColorIterator++] = clickColor.r;
+        clickColors[clickColorIterator++] = clickColor.g;
+        clickColors[clickColorIterator++] = clickColor.b;
+      }
+      // create the geometry
+      var geometry = new THREE.InstancedBufferGeometry();
+      var position = new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3);
+      var translation = new THREE.InstancedBufferAttribute(translations, 3, false, 1);
+      var color = new THREE.InstancedBufferAttribute(colors, 3, false, 1);
+      var clickColor = new THREE.InstancedBufferAttribute(clickColors, 3, false, 1);
+      geometry.setAttribute('position', position);
+      geometry.setAttribute('translation', translation);
+      geometry.setAttribute('color', color);
+      geometry.setAttribute('clickColor', clickColor);
+      // build the mesh
+      this.mesh = new THREE.Points(geometry, this.getMaterial());
+      this.mesh.frustumCulled = false;
+      world.scene.add(this.mesh);
+      // initialize downstream layers that depend on this mesh
+      picker.init();
+      preview.timeout = setTimeout(function() {
+        preview.redraw();
+      }.bind(preview), 1000)
+      // flip the initialization bool
+      this.initialize();
+    })
   })
+}
 
-  fetch('assets/data/positions.json').then(data => data.json()).then(json => {
-    this.positions = json.positions.slice(0, this.n);
-    this.colors = json.colors.slice(0, this.n);
-    preview.createIndex(this.positions);
-    var clickColor = new THREE.Color(),
-        clickColors = new Float32Array(this.positions.length * 3),
-        colors = new Float32Array(this.positions.length * 3),
-        translations = new Float32Array(this.positions.length * 3),
-        translationIterator = 0,
-        colorIterator = 0,
-        clickColorIterator = 0;
-    for (var i=0; i<this.positions.length; i++) {
-      clickColor.setHex(i + 1);
-      var color = cmap((this.colors || {})[i] || 0);
-      translations[translationIterator++] = this.positions[i][0];
-      translations[translationIterator++] = this.positions[i][1];
-      translations[translationIterator++] = 0;
-      colors[colorIterator++] = color.r;
-      colors[colorIterator++] = color.g;
-      colors[colorIterator++] = color.b;
-      clickColors[clickColorIterator++] = clickColor.r;
-      clickColors[clickColorIterator++] = clickColor.g;
-      clickColors[clickColorIterator++] = clickColor.b;
-    }
-    // create the geometry
-    var geometry = new THREE.InstancedBufferGeometry();
-    var position = new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3);
-    var translation = new THREE.InstancedBufferAttribute(translations, 3, false, 1);
-    var color = new THREE.InstancedBufferAttribute(colors, 3, false, 1);
-    var clickColor = new THREE.InstancedBufferAttribute(clickColors, 3, false, 1);
-    geometry.setAttribute('position', position);
-    geometry.setAttribute('translation', translation);
-    geometry.setAttribute('color', color);
-    geometry.setAttribute('clickColor', clickColor);
-    // build the mesh
-    this.mesh = new THREE.Points(geometry, this.getMaterial());
-    this.mesh.frustumCulled = false;
-    world.scene.add(this.mesh);
-    // initialize downstream layers that depend on this mesh
-    picker.init();
-    preview.timeout = setTimeout(function() {
-      preview.redraw();
-    }.bind(preview), 1000)
-    // flip the initialization bool
+Points.prototype.initialize = function() {
+  if (this.positions.length && this.texts.length) {
     this.initialized = true;
-  })
+    document.querySelector('#loader').style.display = 'none';
+  }
 }
 
 Points.prototype.getMaterial = function() {
@@ -348,7 +362,7 @@ function TouchTexture() {
   this.maxForce = 0.4; // max amount of momentum in big gestures
   this.frozen = false;
   this.mouse = {x: 0, y: 0};
-  this.mouseMoveElem = document.body;
+  this.pointermoveElem = document.body;
   this.renderCanvas = false;
   this.trail = [];
   this.setTexture();
@@ -443,8 +457,8 @@ TouchTexture.prototype.drawCursor = function() {
   this.ctx.fill();
 }
 
-TouchTexture.prototype.handleMouseMove = function(e) {
-  var elem = this.mouseMoveElem;
+TouchTexture.prototype.handlePointerMove = function(e) {
+  var elem = this.pointermoveElem;
   var w = elem.clientWidth;
   var h = elem.clientHeight;
   // get the initial, unnormalized point coords
@@ -465,7 +479,7 @@ TouchTexture.prototype.handleMouseMove = function(e) {
 }
 
 TouchTexture.prototype.addEventListeners = function() {
-  this.mouseMoveElem.addEventListener('mousemove', this.handleMouseMove.bind(this));
+  this.pointermoveElem.addEventListener('pointermove', this.handlePointerMove.bind(this));
 }
 
 /**
@@ -565,7 +579,7 @@ Tooltip.prototype.getHTML = function(index) {
 }
 
 Tooltip.prototype.addEventListeners = function() {
-  document.querySelector('#tooltip').addEventListener('mousemove', function(e) {
+  document.querySelector('#tooltip').addEventListener('pointermove', function(e) {
     e.stopPropagation();
   }.bind(this));
 
@@ -573,7 +587,7 @@ Tooltip.prototype.addEventListeners = function() {
     e.stopPropagation();
   }.bind(this));
 
-  world.renderer.domElement.addEventListener('mousemove', function(e) {
+  world.renderer.domElement.addEventListener('pointermove', function(e) {
     this.close();
   }.bind(this))
 }
@@ -587,7 +601,7 @@ function Preview() {
   this.hovered = null;
   this.n = 50;
   this.margin = 10;
-  this.size = 40;
+  this.size = 50;
   this.timeout = null;
   this.mouseTimeout = null;
   this.addEventListeners();
@@ -664,7 +678,11 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getHTML = function(index) {
-  if (!points.texts) return;
+  if (!points.texts || !points.texts.length) {
+    setTimeout(function() {
+      this.getHTML(index)
+    }.bind(this), 500)
+  }
   var url = points.texts[index].thumb;
   var div = document.createElement('div');
   div.style.backgroundImage = `url("${url}")`;
@@ -672,18 +690,18 @@ Preview.prototype.getHTML = function(index) {
   div.id = 'preview-' + index;
   div.style.height = this.size + 'px';
   div.style.width = this.size + 'px';
-  div.onmousedown = function(index, e) {
-    // mousemove events are paused while hovering previews, so set mouse coords before showing tooltip
+  div.onpointerdown = function(index, e) {
+    // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
     mouse.set(e);
     tooltip.display(index);
     e.stopPropagation();
   }.bind(this, index);
-  div.onmousemove = function(index, e) {
+  div.onpointermove = function(index, e) {
     this.setHovered(index);
     // stop propagation to prevent the picker from selecting an adjacent cell
     e.stopPropagation();
     // pass this event to the touchtexture to facilitate trails
-    touchtexture.handleMouseMove(e);
+    touchtexture.handlePointerMove(e);
   }.bind(this, index);
   return div;
 }
@@ -697,6 +715,7 @@ Preview.prototype.clear = function() {
 }
 
 Preview.prototype.redraw = function() {
+  clearTimeout(this.timeout);
   if (points.texts.length > 0) {
     this.clear();
     this.select();
@@ -709,7 +728,7 @@ Preview.prototype.redraw = function() {
 }
 
 // measure the delta between e and the position of this.mouse
-Preview.prototype.measureMouseMovement = function(e) {
+Preview.prototype.measurepointermovement = function(e) {
   var p = getEventClientCoords(e);
   return {
     x: Math.abs(mouse.down.x - p.x),
@@ -781,51 +800,59 @@ Preview.prototype.enlarge = function(id) {
   else elem.classList.remove('pulse');
 }
 
-Preview.prototype.addEventListeners = function() {
-  window.addEventListener('mousemove', function(e) {
-    // if the mouse is down and we're dragging, clear the board
-    if (mouse.down) {
-      // if the user has dragged too far clear
-      var d = this.measureMouseMovement(e);
-      if (d.x > 2 || d.y > 2) {
-        mouse.dragging = true;
-        this.clear();
-      }
-    // else check if we're hovering a cell
-    } else {
-      // once the mouse stops moving, find the hovered point (if any)
-      window.clearTimeout(this.mouseTimeout);
-      this.mouseTimeout = setTimeout(function() {
-        this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
-      }.bind(this), 100)
-    }
-  }.bind(this))
+Preview.prototype.handleMouseUp = function(e) {
+  // if the user has dragged too far clear
+  if (mouse.dragging) {
+    this.timeout = setTimeout(function() {
+      this.redraw();
+    }.bind(this), 250)
+  }
+}
 
-  window.addEventListener('mouseup', function(e) {
+Preview.prototype.handleMouseMove = function(e) {
+  // if the mouse is down and we're dragging, clear the board
+  if (mouse.down) {
     // if the user has dragged too far clear
-    if (mouse.dragging) {
-      this.timeout = setTimeout(function() {
-        this.redraw();
-      }.bind(this), 250)
+    var d = this.measurepointermovement(e);
+    if (d.x > 2 || d.y > 2) {
+      mouse.dragging = true;
+      this.clear();
     }
-  }.bind(this))
+  // else check if we're hovering a cell
+  } else {
+    // once the mouse stops moving, find the hovered point (if any)
+    window.clearTimeout(this.mouseTimeout);
+    this.mouseTimeout = setTimeout(function() {
+      this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
+    }.bind(this), 100)
+  }
+}
 
-  window.addEventListener('wheel', function() {
-    this.clear();
-    if (this.timeout) clearTimeout(this.timeout);
-    this.timeout = setTimeout(function() {
-      this.redraw();
-    }.bind(this), 700)
-  }.bind(this))
+Preview.prototype.handleWheel = function() {
+  this.clear();
+  if (this.timeout) clearTimeout(this.timeout);
+  this.timeout = setTimeout(function() {
+    this.redraw();
+  }.bind(this), 700)
+}
 
-  window.addEventListener('resize', function() {
-    this.clear();
-    if (this.timeout) clearTimeout(this.timeout);
-    this.timeout = setTimeout(function() {
-      this.redraw();
-    }.bind(this), 200)
-  }.bind(this))
+Preview.prototype.handleResize = function() {
+  this.clear();
+  if (this.timeout) clearTimeout(this.timeout);
+  this.timeout = setTimeout(function() {
+    this.redraw();
+  }.bind(this), 200)
+}
 
+Preview.prototype.addEventListeners = function() {
+  window.addEventListener('pointermove', this.handleMouseMove.bind(this))
+  window.addEventListener('touchmove', this.handleMouseMove.bind(this))
+
+  window.addEventListener('pointerup', this.handleMouseUp.bind(this))
+  window.addEventListener('touchend', this.handleMouseUp.bind(this), { passive: false })
+
+  window.addEventListener('resize', this.handleResize.bind(this))
+  window.addEventListener('wheel', this.handleWheel.bind(this), { passive: true })
 }
 
 /**
@@ -837,48 +864,48 @@ function Lasso() {
   this.time = 0; // time counter for animating polyline
   this.points = []; // array of {x: y: } point objects tracing user polyline
   this.enabled = false; // boolean indicating if any actions on the lasso are permitted
-  this.capturing = false; // boolean indicating if we're recording mousemoves
+  this.capturing = false; // boolean indicating if we're recording pointermoves
   this.frozen = false; // boolean indicating whether to listen to mouse events
   this.mesh = null; // the rendered polyline outlining user selection
   this.selected = {}; // d[cell idx] = bool indicating if selected
   this.displayed = false; // bool indicating whether the modal is displayed
-  this.mousedownCoords = {}; // obj storing x, y, z coords of mousedown
+  this.pointerdownCoords = {}; // obj storing x, y, z coords of pointerdown
   this.addEventListeners();
 }
 
 Lasso.prototype.addEventListeners = function() {
-  window.addEventListener('mousedown', this.handleMouseDown.bind(this));
-  window.addEventListener('touchstart', this.handleMouseDown.bind(this));
+  window.addEventListener('pointerdown', this.handlePointerDown.bind(this));
+  window.addEventListener('touchstart', this.handlePointerDown.bind(this), { passive: false });
 
-  window.addEventListener('mousemove', this.handleMouseMove.bind(this));
-  window.addEventListener('touchmove', this.handleMouseMove.bind(this));
+  window.addEventListener('pointermove', this.handlePointerMove.bind(this));
+  window.addEventListener('touchmove', this.handlePointerMove.bind(this), { passive: false });
 
-  window.addEventListener('mouseup', this.handleMouseUp.bind(this));
-  window.addEventListener('touchend', this.handleMouseUp.bind(this));
+  window.addEventListener('pointerup', this.handlePointerUp.bind(this));
+  window.addEventListener('touchend', this.handlePointerUp.bind(this), { passive: false });
 }
 
-Lasso.prototype.handleMouseDown = function(e) {
+Lasso.prototype.handlePointerDown = function(e) {
   if (!this.enabled) return;
-  this.mousedownCoords = getEventClientCoords(e);
+  this.pointerdownCoords = getEventClientCoords(e);
   this.setCapturing(true);
   this.setFrozen(false);
 }
 
-Lasso.prototype.handleMouseMove = function(e) {
+Lasso.prototype.handlePointerMove = function(e) {
   if (!this.capturing || this.frozen) return;
   if (!this.isLassoEvent(e)) return;
   this.points.push(getEventWorldCoords(e));
   this.draw();
 }
 
-Lasso.prototype.handleMouseUp = function(e) {
+Lasso.prototype.handlePointerUp = function(e) {
   if (!this.enabled) return;
   // prevent the lasso points from changing
   this.setFrozen(true);
   // if the user registered a click, clear the lasso
   var coords = getEventClientCoords(e);
-  if (coords.x == this.mousedownCoords.x &&
-      coords.y == this.mousedownCoords.y &&
+  if (coords.x == this.pointerdownCoords.x &&
+      coords.y == this.pointerdownCoords.y &&
       !keyboard.shiftPressed() &&
       !keyboard.commandPressed()) {
     this.clear();
@@ -1026,23 +1053,23 @@ function Mouse() {
 
 Mouse.prototype.addEventListeners = function() {
 
-  window.addEventListener('mousemove', function(e) {
+  window.addEventListener('pointermove', function(e) {
     this.set(e);
     this.dragging = this.down && (
       Math.abs(this.x - this.down.x) > 1 ||
       Math.abs(this.y - this.down.y) > 1
     ) ? true : false;
-    //e.target.dispatchEvent(new CustomEvent('trails-mousemove', this.getEventMeta(e)));
+    //e.target.dispatchEvent(new CustomEvent('trails-pointermove', this.getEventMeta(e)));
   }.bind(this))
 
-  window.addEventListener('mousedown', function(e) {
+  window.addEventListener('pointerdown', function(e) {
     this.down = getEventClientCoords(e);
-    //e.target.dispatchEvent(new CustomEvent('trails-mousedown', this.getEventMeta(e)));
+    //e.target.dispatchEvent(new CustomEvent('trails-pointerdown', this.getEventMeta(e)));
   }.bind(this))
 
-  // reset dragging after propagation so mouseup knows if we're finishing a drag
-  window.addEventListener('mouseup', function(e) {
-    //e.target.dispatchEvent(new CustomEvent('trails-mouseup', this.getEventMeta(e)));
+  // reset dragging after propagation so pointerup knows if we're finishing a drag
+  window.addEventListener('pointerup', function(e) {
+    //e.target.dispatchEvent(new CustomEvent('trails-pointerup', this.getEventMeta(e)));
     this.dragging = false;
     this.down = false;
   }.bind(this))
