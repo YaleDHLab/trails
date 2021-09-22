@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'>
     <link href='assets/style.css' rel='stylesheet' type='text/css'/>
   </head>
   <body class=''>
@@ -10,10 +10,12 @@
     <!-- Sample template for wiki pages -->
     <script type='x-html/x-template' id='tooltip-template'>
       <div class="wiki-bio row align-center">
-        <div class="wiki-image" style='background-image:url("<%= metadata.thumb %>")'></div>
+        <div class="wiki-image" style='background-image:url("<%= escape(metadata.thumb) %>")'></div>
         <div class="col ">
           <div class="row space-between">
-            <div class="col wiki-name"><%= metadata.name.replaceAll('_', ' ').replaceAll(/ *\([^)]*\) */g, '') %></div>
+            <div class="col wiki-name">
+              <%= metadata.name.replaceAll('_', ' ').replaceAll(/ *\([^)]*\) */g, '') %>
+            </div>
             <a href="https://en.wikipedia.org/wiki/<%= metadata.name %>" target="_blank">
               <img class="wiki-icon" src="assets/images/wikipedia-icon.svg">
             </a>

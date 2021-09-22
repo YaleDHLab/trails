@@ -98,11 +98,6 @@ Points.prototype.init = function() {
   this.positions = [];
   this.texts = [];
   this.n = 100000;
-
-  var tooltip = document.querySelector('#tooltip'),
-      point = document.querySelector('#point'),
-      selected = document.querySelector('#selected-point');
-
   Promise.all([
     fetch('assets/data/texts.json'),
     fetch('assets/data/positions.json'),
@@ -631,7 +626,6 @@ Preview.prototype.select = function() {
       index: index,
     };
     // if the point is visible and doesn't overlap with others, add it
-    if (i % 1000 == 0) console.log(' * crawled through', i)
     if (
       world.x >= bounds.x[0] &&
       world.x <= bounds.x[1] &&
@@ -685,7 +679,7 @@ Preview.prototype.getHTML = function(index) {
   }
   var url = points.texts[index].thumb;
   var div = document.createElement('div');
-  div.style.backgroundImage = `url("${url}")`;
+  div.style.backgroundImage = `url("${decodeURIComponent(url)}")`;
   div.className = 'preview';
   div.id = 'preview-' + index;
   div.style.height = this.size + 'px';

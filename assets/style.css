@@ -84,7 +84,7 @@ body.night-mode {
   right: 0;
   bottom: 0;
   left: 0;
-  background-image: url(assets/images/particle-texture.jpg);
+  background-image: url(images/particle-texture.jpg);
   opacity: 0.2;
   border-radius: 100%;
   background-size: 140px;
@@ -361,4 +361,22 @@ body.night-mode #tweet .twitter-icon {
 
 body.night-mode #tweet .twitter-name div:nth-of-type(2) {
   color: #aaa;
+}
+
+/**
+* Loader
+**/
+
+#loader {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #f9f9f9;
+  z-index: 100;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
 }
