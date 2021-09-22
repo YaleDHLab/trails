@@ -871,17 +871,6 @@ function Lasso() {
   this.addEventListeners();
 }
 
-Lasso.prototype.addEventListeners = function() {
-  window.addEventListener('pointerdown', this.handlePointerDown.bind(this));
-  window.addEventListener('touchstart', this.handlePointerDown.bind(this), { passive: false });
-
-  window.addEventListener('pointermove', this.handlePointerMove.bind(this));
-  window.addEventListener('touchmove', this.handlePointerMove.bind(this), { passive: false });
-
-  window.addEventListener('pointerup', this.handlePointerUp.bind(this));
-  window.addEventListener('touchend', this.handlePointerUp.bind(this), { passive: false });
-}
-
 Lasso.prototype.handlePointerDown = function(e) {
   if (!this.enabled) return;
   this.pointerdownCoords = getEventClientCoords(e);
@@ -902,16 +891,23 @@ Lasso.prototype.handlePointerUp = function(e) {
   this.setFrozen(true);
   // if the user registered a click, clear the lasso
   var coords = getEventClientCoords(e);
-  if (coords.x == this.pointerdownCoords.x &&
-      coords.y == this.pointerdownCoords.y &&
-      !keyboard.shiftPressed() &&
-      !keyboard.commandPressed()) {
-    this.clear();
-  }
-  // do not turn off capturing if the user is clicking the lasso symbol
-  if (!e.target.id || e.target.id == 'select') return;
+  if (
+    coords.x == mouse.down.x &&
+    coords.y == mouse.down.y
+  ) this.clear();
   // prevent the lasso from updating its points boundary
   this.setCapturing(false);
+}
+
+Lasso.prototype.addEventListeners = function() {
+  window.addEventListener('pointerdown', this.handlePointerDown.bind(this));
+  window.addEventListener('touchstart', this.handlePointerDown.bind(this), { passive: false });
+
+  window.addEventListener('pointermove', this.handlePointerMove.bind(this));
+  window.addEventListener('touchmove', this.handlePointerMove.bind(this), { passive: false });
+
+  window.addEventListener('pointerup', this.handlePointerUp.bind(this));
+  window.addEventListener('touchend', this.handlePointerUp.bind(this), { passive: false });
 }
 
 // 2D convex hull via https://github.com/brian3kb/graham_scan_js
@@ -1191,10 +1187,11 @@ var tooltip = new Tooltip();
 var stats = new Stats();
 var preview = new Preview();
 var mouse = new Mouse();
+var lasso = new Lasso();
 
 points.init();
 world.resize();
 world.render();
 
-document.body.appendChild(stats.dom);
+document.querySelector('#elements').appendChild(stats.dom);
 stats.begin();
