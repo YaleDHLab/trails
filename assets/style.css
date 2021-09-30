@@ -1,0 +1,382 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+canvas,
+#canvas-container {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: #f9f9f9;
+}
+
+body.night-mode {
+  background-color: #000;
+}
+
+#canvas-container {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+/**
+ * Flex
+ **/
+
+.row {
+  display: flex;
+  flex-direction: row;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.space-between {
+  justify-content: space-between;
+}
+
+/**
+* Preview
+**/
+
+.preview {
+  position: absolute;
+  z-index: 10;
+  background-color: #ddd;
+  background-image: none;
+  background-size: cover;
+  background-position: center top;
+  border: 1px solid #555;
+  border-radius: 100%;
+  opacity: 1;
+  animation-name: increase-scale;
+  animation-duration: 0.6s;
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(.22,1.16,.69,1.28);
+  transform: translate(-50%, -50%) scale(0.01);
+}
+
+.preview.small {
+  animation-name: decrease-scale;
+  animation-delay: 0s !important;
+}
+
+.preview.pulse {
+  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+}
+
+.preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(images/particle-texture.jpg);
+  opacity: 0.2;
+  border-radius: 100%;
+  background-size: 140px;
+  background-repeat: no-repeat;
+}
+
+/**
+ * Keyframes
+ **/
+
+@keyframes decrease-scale {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+}
+
+@keyframes increase-scale {
+  0% {
+    transform: translate(-50%, -50%) scale(0.1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes square-edges {
+  0% {
+    border-radius: 100%;
+  }
+  100% {
+    border-radius: 0%;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translate(0, 10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+/**
+* Tooltip
+**/
+
+#tooltip {
+  position: absolute;
+  z-index: 100;
+  width: 0;
+  height: 0;
+}
+
+/**
+ * Tooltip Hover
+ **/
+
+.tooltip-hover {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #555;
+  border-radius: 100%;
+  background-size: cover;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.1);
+  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+}
+
+/**
+ * Tooltip Click: Wikipedia Bio
+ **/
+
+.wiki-bio {
+  width: 0px;
+  height: 0px;
+  background: #e0e0e0;
+  padding: 10px;
+  box-sizing: border-box;
+  font-family: Arial;
+  /* animation-duration animation-name delay-before-animation fill-direction */
+  animation: 0.8s increase-radius-150 0.0s forwards, 0.8s lighten forwards, 0.5s square-edges 0.35s forwards, 0.3s increase-width-360 0.85s forwards;
+  box-shadow: 0 0 6px rgb(0 0 0 / 20%);
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  border-radius: 100%;
+}
+
+.wiki-bio > * {
+  opacity: 0;
+  animation: 0.5s fade-in 1s forwards;
+}
+
+.wiki-image {
+  height: 130px;
+  width: 130px;
+  background-size: cover;
+  flex: 0 0 130px;
+  margin-right: 10px;
+}
+
+.wiki-bio .col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 100%;
+}
+
+.wiki-icon {
+  height: 20px;
+}
+
+.wiki-bio p {
+  font-size: 0.775em;
+  color: #777;
+  line-height: 1.25em;
+}
+
+@keyframes lighten {
+  0% {
+    background: #383838;
+  }
+  100% {
+    background: #f1f1f1;
+  }
+}
+
+@keyframes increase-radius-150 {
+  0% {
+    width: 0;
+    height: 0;
+  }
+  100% {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@keyframes increase-width-360 {
+  0% {
+    width: 150px;
+    transform: translate(-75px, -50%);
+  }
+  100% {
+    width: 360px;
+    transform: translate(-75px, -50%);
+  }
+}
+
+/**
+ * Tweet Tooltip
+ **/
+
+#tweet {
+  width: 1px;
+  height: 1px;
+  background: #434343;
+  border-radius: 100%;
+  /* argument order is: animation_duration animation_name pause forwards-backwards */
+  animation: 0.8s increase-radius-light-200 0.0s forwards, 0.5s square-edges 0.35s forwards, 0.5s increase-width-310 0.7s forwards;
+  box-shadow: 0 0 6px rgb(0 0 0 / 20%);
+  transform: translate(-50%, -50%);
+  transform-origin: center center;
+  font-size: 14px;
+  padding: 15px;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: Arial;
+}
+
+#tweet > * {
+  opacity: 0;
+  animation: 0.5s fade-in 1s forwards;
+  color: #222;
+}
+
+#tweet .twitter-image {
+  margin-bottom: 12px;
+  margin-right: 12px;
+}
+
+#tweet .twitter-name div:nth-of-type(1) {
+  font-weight: 600;
+}
+
+#tweet .twitter-name div:nth-of-type(2) {
+  color: #999;
+}
+
+#tweet p {
+  font-size: 15px;
+  overflow: hidden;
+  max-height: 120px;
+  max-width: 100%;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+
+#tweet p:-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#tweet .twitter-icon {
+  width: 24px;
+  height: 24px;
+}
+
+@keyframes increase-radius-light-200 {
+  0% {
+    width: 1px;
+    height: 1px;
+    background: #383838;
+  }
+  100% {
+    width: 200px;
+    height: 200px;
+    background: #f1f1f1;
+  }
+}
+
+@keyframes increase-radius-dark-200 {
+  0% {
+    width: 1px;
+    height: 1px;
+    background: transparent;
+  }
+  100% {
+    width: 200px;
+    height: 200px;
+    background: #222;
+  }
+}
+
+@keyframes increase-width-310 {
+  0% {
+    transform: translate(-100px, -100px);
+  }
+  100% {
+    transform: translate(-100px, -100px);
+    width: 310px;
+  }
+}
+
+body.night-mode #tweet {
+  background: #222;
+  animation: 0.8s increase-radius-dark-200 0.0s forwards, 0.5s square-edges 0.35s forwards, 0.5s increase-width 0.7s forwards;
+}
+
+body.night-mode #tweet * {
+  color: #fff;
+}
+
+body.night-mode #tweet .twitter-icon {
+  filter: invert(1);
+}
+
+body.night-mode #tweet .twitter-name div:nth-of-type(2) {
+  color: #aaa;
+}
+
+/**
+* Loader
+**/
+
+#loader {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #f9f9f9;
+  z-index: 100;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}

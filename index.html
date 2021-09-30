@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'>
+    <link href='assets/style.css' rel='stylesheet' type='text/css'/>
+  </head>
+  <body class=''>
+
+    <div id='templates'>
+      <!-- Sample template for wiki pages -->
+      <script type='x-html/x-template' id='tooltip-template'>
+        <div class="wiki-bio row align-center">
+          <div class="wiki-image" style='background-image:url("<%= escape(metadata.thumb) %>")'></div>
+          <div class="col ">
+            <div class="row space-between">
+              <div class="col wiki-name">
+                <%= metadata.name.replaceAll('_', ' ').replaceAll(/ *\([^)]*\) */g, '') %>
+              </div>
+              <a href="https://en.wikipedia.org/wiki/<%= metadata.name %>" target="_blank">
+                <img class="wiki-icon" src="assets/images/wikipedia-icon.svg">
+              </a>
+            </div>
+            <p><%= metadata.abstract %></p>
+          </div>
+        </div>
+      </script>
+
+      <!-- Sample template for tweets -->
+      <script type='x-html/x-template'>
+        <div id='tweet'>
+          <div class="row align-center space-between">
+            <div class="row align-center">
+              <img class='twitter-image' src="https://via.placeholder.com/40">
+              <div class="col twitter-name">
+                <div>Donald J. Trump</div>
+                <div>@realDonaldTrump</div>
+              </div>
+            </div>
+            <img class="twitter-icon" src="assets/images/twitter-icon.svg">
+          </div>
+          <p id='text'><%= decodeURIComponent(escape(metadata)) %></p>
+        </div>
+      </script>
+    </div>
+
+    <div id='elements'>
+      <div id='lasso-button'></div>
+      <div id='canvas-container'></div>
+      <div id='tooltip'></div>
+      <div id='previews-container'></div>
+      <div id='hovered-preview'></div>
+      <div id='loader'>
+        <svg version='1.1' id='Layer_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' width='24px' height='30px' viewBox='0 0 24 30' style='enable-background:new 0 0 50 50;' xml:space='preserve'>
+          <rect x='0' y='0' width='4' height='10' fill='#333'>
+            <animateTransform attributeType='xml' attributeName='transform' type='translate' values='0 0; 0 20; 0 0' begin='0' dur='0.6s' repeatCount='indefinite' />
+          </rect>
+          <rect x='10' y='0' width='4' height='10' fill='#333'>
+            <animateTransform attributeType='xml' attributeName='transform' type='translate' values='0 0; 0 20; 0 0' begin='0.2s' dur='0.6s' repeatCount='indefinite' />
+          </rect>
+          <rect x='20' y='0' width='4' height='10' fill='#333'>
+            <animateTransform attributeType='xml' attributeName='transform' type='translate' values='0 0; 0 20; 0 0' begin='0.4s' dur='0.6s' repeatCount='indefinite' />
+          </rect>
+        </svg>
+      </div>
+    </div>
+
+    <div id='scripts'>
+      <script src='assets/js/three.min.js'></script>
+      <script src='assets/js/trackball-controls.js'></script>
+      <script src='assets/js/gunzip.min.js'></script>
+      <script src='assets/js/stats.js'></script>
+      <script src='assets/js/luminosity.js'></script>
+      <script src='assets/js/effect-composer.js'></script>
+      <script src='assets/js/unreal-bloom.js'></script>
+      <script src='assets/js/lodash.min.js'></script>
+      <script src='assets/js/kdbush.min.js'></script>
+      <script src='assets/js/script.js'></script>
+    </div>
+  </body>
+</html>
