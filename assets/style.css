@@ -29,6 +29,11 @@ body.night-mode {
   overflow: hidden;
 }
 
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
 /**
  * Flex
  **/
@@ -68,13 +73,27 @@ body.night-mode {
   transform: translate(-50%, -50%) scale(0.01);
 }
 
+body.night-mode .preview {
+  border: 1px solid #afafaf;
+  box-shadow: 0 0 .05rem rgba(255, 255, 255, 0.4),
+              0 0 .05rem rgba(255, 255, 255, 0.4),
+              0 0 0.5rem rgba(255, 255, 255, 0.4),
+              0 0 0.2rem rgba(255, 255, 255, 0.4),
+              0 0 0.7rem rgba(255, 255, 255, 0.4),
+              inset 0 0 0.325rem rgba(255, 255, 255, 0.4);
+}
+
 .preview.small {
   animation-name: decrease-scale;
   animation-delay: 0s !important;
 }
 
 .preview.pulse {
-  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
+}
+
+body.night-mode .preview.pulse {
+  animation: increase-scale 0.3s forwards, pulse-light 2s infinite;
 }
 
 .preview::before {
@@ -133,7 +152,7 @@ body.night-mode {
   }
 }
 
-@keyframes pulse {
+@keyframes pulse-dark {
   0% {
     box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.4);
   }
@@ -142,6 +161,18 @@ body.night-mode {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+@keyframes pulse-light {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
   }
 }
 
@@ -168,7 +199,11 @@ body.night-mode {
   background-size: cover;
   pointer-events: none;
   transform: translate(-50%, -50%) scale(0.1);
-  animation: increase-scale 0.3s forwards, pulse 2s infinite;
+  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
+}
+
+body.night-mode .tooltip-hover {
+  animation: increase-scale 0.3s forwards, pulse-light 2s infinite;
 }
 
 /**
@@ -373,10 +408,74 @@ body.night-mode #tweet .twitter-name div:nth-of-type(2) {
   right: 0;
   bottom: 0;
   left: 0;
-  background: #f9f9f9;
+  background: #000;
   z-index: 100;
   display: flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
+}
+
+/**
+* Lasso
+**/
+
+#lasso-button {
+  background: darkorange;
+  width: 100px;
+  height: 100px;
+  position: absolute;
+  bottom: 0;
+  cursor: pointer;
+  z-index: 3;
+  display: none;
+}
+
+/**
+* Brand
+**/
+
+#brand {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  color: #fff;
+  font-family: courier;
+  text-shadow: 0 0 7px #fff,
+               0 0 10px #fff,
+               0 0 21px #fff,
+               0 0 42px #84bfca,
+               0 0 82px #84bfca,
+               0 0 92px #84bfca,
+               0 0 102px #84bfca,
+               0 0 151px #84bfca;
+}
+
+/**
+* DAT.GUI
+**/
+
+.dg.ac {
+  z-index: 100 !important;
+}
+
+/**
+* Noscript
+**/
+
+noscript {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #000;
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex-direction: row;
+  z-index: 1000;
+  font-family: courier;
 }
