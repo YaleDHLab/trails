@@ -15,8 +15,8 @@ var dpi = window.devicePixelRatio || 1;
 
 function State() {
   this.points = {
+    size: 1.0,
     colors: 'blues',
-    size: 2.0,
   };
   this.previews = {
     number: 50,
@@ -58,8 +58,8 @@ function World() {
   this.renderer.toneMapping = THREE.ReinhardToneMapping;
   this.renderer.toneMappingExposure = state.glow.exposure;
   this.bloom = new THREE.UnrealBloomPass(
-    new THREE.Vector2(size.w, size.h),
-    1.5,
+    new THREE.Vector2(size.w, size.h), // resolution
+    1.5, //
     0.4,
     0.85,
   );
@@ -316,6 +316,8 @@ Points.prototype.getMaterial = function() {
       varying float vSize;
       varying float vSelected;
 
+      // PERLIN_NOISE
+
       void main() {
 
         // position and project the point
@@ -343,14 +345,14 @@ Points.prototype.getMaterial = function() {
         gl_PointSize = min(gl_PointSize, 30.0);
 
         // pass varyings
-        //vColor = clouds(gl_Position.x, gl_Position.y) + vec3(.5, .8, 0.95);
-        vColor = color;
+        vColor = clouds(gl_Position.x, gl_Position.y) + vec3(.5, .8, 0.95);
+        //vColor = color;
 
         vClickColor = clickColor;
         vSelected = selected;
         vSize = gl_PointSize;
       }
-    `,
+    `.replace('// PERLIN_NOISE', perlin),
     fragmentShader: `
       precision mediump float;
 
@@ -846,7 +848,8 @@ Preview.prototype.overlaps = function(a) {
 
 Preview.prototype.getHTML = function(index) {
   if (!points.texts || !points.texts.length || !points.texts[index]) {
-    setTimeout(function() {
+    clearTimeout(this.timeout);
+    this.timeout = setTimeout(function() {
       this.getHTML(index)
     }.bind(this), 500)
   }

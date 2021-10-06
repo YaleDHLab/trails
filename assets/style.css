@@ -458,3 +458,24 @@ body.night-mode #tweet .twitter-name div:nth-of-type(2) {
 .dg.ac {
   z-index: 100 !important;
 }
+
+/**
+* Noscript
+**/
+
+noscript {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #000;
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex-direction: row;
+  z-index: 1000;
+  font-family: courier;
+}
