@@ -450,3 +450,11 @@ body.night-mode #tweet .twitter-name div:nth-of-type(2) {
                0 0 102px #84bfca,
                0 0 151px #84bfca;
 }
+
+/**
+* DAT.GUI
+**/
+
+.dg.ac {
+  z-index: 100 !important;
+}
