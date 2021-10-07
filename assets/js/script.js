@@ -142,7 +142,9 @@ Points.prototype.init = function() {
   this.positions = [];
   this.texts = [];
   this.n = 100000;
-  this.cmap = interpolateArray(colorScales[state.points.colors]);
+  this.cmap = state.points.colors === 'perlin'
+    ? function() {return {r: 0, g: 0, b: 0}}
+    : interpolateArray(colorScales[state.points.colors]);
   Promise.all([
     fetch('assets/data/texts.json'),
     fetch('assets/data/positions.json'),
@@ -205,17 +207,22 @@ Points.prototype.init = function() {
 }
 
 Points.prototype.setColors = function(val) {
-  this.cmap = interpolateArray(colorScales[val]);
-  var colors = new Float32Array(this.positions.length * 3),
-      index = 0;
-  for (var i=0; i<this.positions.length; i++) {
-    var color = this.cmap((this.colors || {})[i] || 0);
-    colors[index++] = color.r;
-    colors[index++] = color.g;
-    colors[index++] = color.b;
+  if (val === 'perlin') {
+    this.mesh.material.uniforms.usePerlin.value = 1.0;
+  } else {
+    this.cmap = interpolateArray(colorScales[val]);
+    var colors = new Float32Array(this.positions.length * 3),
+        index = 0;
+    for (var i=0; i<this.positions.length; i++) {
+      var color = this.cmap((this.colors || {})[i] || 0);
+      colors[index++] = color.r;
+      colors[index++] = color.g;
+      colors[index++] = color.b;
+    }
+    this.mesh.material.uniforms.usePerlin.value = 0.0;
+    this.mesh.geometry.attributes.color.array = colors;
+    this.mesh.geometry.attributes.color.needsUpdate = true;
   }
-  this.mesh.geometry.attributes.color.array = colors;
-  this.mesh.geometry.attributes.color.needsUpdate = true;
 }
 
 Points.prototype.setAttribute = function(name, arr) {
@@ -304,6 +311,7 @@ Points.prototype.getMaterial = function() {
       uniform sampler2D touchtexture;
       uniform float time;
       uniform float size;
+      uniform float usePerlin;
 
       attribute vec3 position;
       attribute vec3 translation;
@@ -345,9 +353,9 @@ Points.prototype.getMaterial = function() {
         gl_PointSize = min(gl_PointSize, 30.0);
 
         // pass varyings
-        vColor = clouds(gl_Position.x, gl_Position.y) + vec3(.5, .8, 0.95);
-        //vColor = color;
-
+        vColor = usePerlin > 0.5
+          ? clouds(gl_Position.x, gl_Position.y) + vec3(.5, .8, 0.95)
+          : color;
         vClickColor = clickColor;
         vSelected = selected;
         vSize = gl_PointSize;
@@ -424,6 +432,10 @@ Points.prototype.getMaterial = function() {
       size: {
         type: 'f',
         value: state.points.size,
+      },
+      usePerlin: {
+        type: 'f',
+        value: state.points.colors === 'perlin' ? 1.0 : 0.0,
       }
     }
   });
@@ -1451,7 +1463,7 @@ function GUI() {
   folder.add(state.points, 'size', 0.0, 2.0).onChange(function(val) {
     points.mesh.material.uniforms.size.value = val;
   }.bind(this));
-  folder.add(state.points, 'colors', ['blues', 'plasma', 'viridis', 'magma']).onChange(function(val) {
+  folder.add(state.points, 'colors', ['blues', 'plasma', 'viridis', 'magma', 'perlin']).onChange(function(val) {
     points.setColors(val);
   })
   // previews
