@@ -738,7 +738,7 @@ Tooltip.prototype.display = function(index) {
   this.worldCoords = screenToWorldCoords(mouse);
   this.setPosition();
   // get the html to display
-  this.target.innerHTML = this.getHTML(index)
+  this.target.innerHTML = this.getTooltipHTML(index)
 }
 
 Tooltip.prototype.setPosition = function() {
@@ -753,7 +753,7 @@ Tooltip.prototype.close = function() {
   this.target.innerHTML = '';
 }
 
-Tooltip.prototype.getHTML = function(index) {
+Tooltip.prototype.getTooltipHTML = function(index) {
   return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
     metadata: points.texts[index],
@@ -820,10 +820,9 @@ Preview.prototype.select = function() {
       world.y <= bounds.y[1] &&
       !(this.overlaps(d))
     ) {
-      d.elem = this.getHTML(d.index);
+      d.elem = this.getPreviewHTML(d.index, `${Math.random()}s`);
       d.elem.style.left = d.x + 'px';
       d.elem.style.top = d.y + 'px';
-      d.elem.style.animationDelay = Math.random() * 1.0 + 's';
       this.selected.push(d);
     }
   }
@@ -858,33 +857,39 @@ Preview.prototype.overlaps = function(a) {
   return false;
 }
 
-Preview.prototype.getHTML = function(index) {
-  if (!points.texts || !points.texts.length || !points.texts[index]) {
+Preview.prototype.getPreviewHTML = function(index, delay) {
+  var meta = (points.texts || [])[index];
+  if (!meta || !meta.thumb) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
-      this.getHTML(index)
-    }.bind(this), 500)
+      this.getPreviewHTML(index)
+    }.bind(this), 500);
+    return;
   }
-  var url = points.texts[index].thumb;
-  var div = document.createElement('div');
-  div.style.backgroundImage = `url("${decodeURIComponent(url)}")`;
-  div.className = 'preview';
+  var div = document.querySelector('#labelled-image-preview').cloneNode(true);
   div.id = 'preview-' + index;
-  div.style.height = this.size + 'px';
-  div.style.width = this.size + 'px';
-  div.onpointerdown = function(index, e) {
+  // style the image component
+  var img = div.querySelector('.preview-image');
+  if (delay) img.style.animationDelay = delay;
+  img.style.height = this.size + 'px';
+  img.style.width = this.size + 'px';
+  img.style.backgroundImage = `url("${decodeURIComponent(meta.thumb)}")`;
+  img.onpointerdown = function(index, e) {
     // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
     mouse.set(e);
     tooltip.display(index);
     e.stopPropagation();
   }.bind(this, index);
-  div.onpointermove = function(index, e) {
+  img.onpointermove = function(index, e) {
     this.setHovered(index);
     // stop propagation to prevent the picker from selecting an adjacent cell
     e.stopPropagation();
     // pass this event to the touchtexture to facilitate trails
     touchtexture.handlePointerMove(e);
   }.bind(this, index);
+  // style the label component
+  var label = div.querySelector('.preview-label');
+  label.textContent = meta.name.replaceAll('_', ' ');
   return div;
 }
 
@@ -921,26 +926,28 @@ Preview.prototype.measurepointermovement = function(e) {
 // display the hovered cell
 Preview.prototype.setHovered = function(id) {
   // prevent consecutive hovering selections
-  clearTimeout(this.mouseTimeout)
+  clearTimeout(this.mouseTimeout);
   // bail if we're being asked to show the cell we're already showing
   if (id === this.hovered) return;
   this.hovered = id;
   // if the id is -1 clear the hovered cell
   if (id === -1) {
     document.querySelector('#hovered-preview').innerHTML = '';
-  // else if the id is in this.selected, just add the pulse
+  // else if the id is in this.selected, just update the claslist
   } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
     // set mouse offscreen to prevent touchtexture focus on point border
     mouse.set({x: -1000, y: -1000});
     document.querySelector('#preview-' + id).classList.add('pulse');
+    document.querySelector('#preview-' + id).classList.add('show-label');
     document.querySelector('#hovered-preview').innerHTML = '';
   // otherwise create the element
   } else {
     // otherwise show this cell
-    var elem = this.getHTML(id);
+    var elem = this.getPreviewHTML(id);
     elem.style.left = mouse.x + 'px';
     elem.style.top = mouse.y + 'px';
     elem.classList.add('pulse');
+    elem.classList.add('show-label');
     document.querySelector('#hovered-preview').innerHTML = '';
     document.querySelector('#hovered-preview').appendChild(elem);
   }
@@ -969,6 +976,7 @@ Preview.prototype.shrink = function(id) {
   elem.style.animationDelay = '0s';
   elem.classList.add('small');
   elem.classList.remove('pulse');
+  elem.classList.remove('show-label');
 }
 
 // increase the size of a preview given the cell id
@@ -978,8 +986,13 @@ Preview.prototype.enlarge = function(id) {
     elem.classList.remove('small');
   }
   // add / remove the pulse class
-  if (this.hovered === id) elem.classList.add('pulse');
-  else elem.classList.remove('pulse');
+  if (this.hovered === id) {
+    elem.classList.add('pulse');
+    elem.classList.add('show-label');
+  } else {
+    elem.classList.remove('pulse');
+    elem.classList.remove('show-label');
+  }
 }
 
 Preview.prototype.handleMouseUp = function(e) {
