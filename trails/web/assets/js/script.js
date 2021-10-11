@@ -156,7 +156,7 @@ Points.prototype.init = function() {
     })
     positions.json().then(positionJson => {
       this.positions = positionJson.positions.slice(0, this.n);
-      this.colors = positionJson.colors.slice(0, this.n);
+      this.colors = null; //positionJson.colors.slice(0, this.n);
       preview.createIndex(this.positions);
       var clickColor = new THREE.Color(),
           clickColors = new Float32Array(this.positions.length * 3),
@@ -168,7 +168,7 @@ Points.prototype.init = function() {
           clickColorIterator = 0;
       for (var i=0; i<this.positions.length; i++) {
         clickColor.setHex(i + 1);
-        var color = this.cmap((this.colors || {})[i] || 0);
+        var color = this.cmap((this.colors || {})[i] || Math.random());
         translations[translationIterator++] = this.positions[i][0];
         translations[translationIterator++] = this.positions[i][1];
         translations[translationIterator++] = 0;
@@ -858,14 +858,18 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getPreviewHTML = function(index, delay) {
-  var meta = (points.texts || [])[index];
-  if (!meta || !meta.thumb) {
+  if (!points.texts) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
       this.getPreviewHTML(index)
     }.bind(this), 500);
     return;
   }
+
+  var meta = (points.texts || [])[index];
+  console.log(' * getting preview', index, meta);
+  if (!(meta.thumb)) return;
+
   var div = document.querySelector('#labelled-image-preview').cloneNode(true);
   div.id = 'preview-' + index;
   // style the image component
@@ -915,7 +919,7 @@ Preview.prototype.redraw = function() {
 }
 
 // measure the delta between e and the position of this.mouse
-Preview.prototype.measurepointermovement = function(e) {
+Preview.prototype.measurePointerMovement = function(e) {
   var p = getEventScreenCoords(e);
   return {
     x: Math.abs(mouse.down.x - p.x),
@@ -944,6 +948,10 @@ Preview.prototype.setHovered = function(id) {
   } else {
     // otherwise show this cell
     var elem = this.getPreviewHTML(id);
+    if (!elem) {
+      console.log(' * preview unavailable', id);
+      return;
+    }
     elem.style.left = mouse.x + 'px';
     elem.style.top = mouse.y + 'px';
     elem.classList.add('pulse');
@@ -1014,10 +1022,10 @@ Preview.prototype.handleMouseMove = function(e) {
   // if the mouse is down and we're dragging, clear the board
   if (mouse.down) {
     // if the user has dragged too far clear
-    var d = this.measurepointermovement(e);
+    var d = this.measurePointerMovement(e);
     // do nothing if click is not on canvas
     if (world.renderer.domElement.contains(e.target)) {
-      if (d.x > 2 || d.y > 2) {
+      if (d.x > 1 || d.y > 1) {
         mouse.dragging = true;
         this.clear();
       }

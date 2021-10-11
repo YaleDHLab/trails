@@ -4,8 +4,10 @@
 *.swp
 *.pem
 *.DS_Store
-.ipynb_checkpoints
+*.egg-info
+*.ipynb_checkpoints
 build
 dist
-assets/data
+datasets
+trails/trails/web/assets/data
 deploy*

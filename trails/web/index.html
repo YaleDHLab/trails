@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'>
-    <meta name='theme-color' content='#000000' />
-    <meta name='description' content="Visualizing massive datasets with WebGL"  />
-    <link href='assets/style.css' rel='stylesheet' type='text/css'/>
-    <meta name='twitter:card' content='summary_large_image'>
-    <meta property='og:image' content='https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/assets/images/preview.png'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Visualizing massive datasets with WebGL"  />
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/>
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="og:image" content="https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/assets/images/preview.png">
     <link rel="image_src" href="https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/assets/images/preview.png" />
     <title>Trails - Visualizing massive datasets with WebGL</title>
     <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Display:wght@500&display=swap" rel="stylesheet">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -32,7 +35,7 @@
 
       <!-- Sample template for wiki pages -->
       <script type='x-html/x-template' id='tooltip-template'>
-        <div class="wiki-bio row align-center">
+        <div class="wiki-bio row align-center paper-texture">
           <div class="wiki-image" style='background-image:url("<%= metadata.thumb %>")'></div>
           <div class="col ">
             <div class="row space-between">
@@ -72,8 +75,8 @@
 
       <!-- Sample preview for images with labels -->
       <div class='preview' id='labelled-image-preview'>
-        <div class='preview-image'></div>
-        <div class='preview-label'></div>
+        <div class='preview-image paper-texture'></div>
+        <div class='preview-label paper-texture'></div>
       </div>
 
     </div>
