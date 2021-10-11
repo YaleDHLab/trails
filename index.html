@@ -9,7 +9,7 @@
     <meta name='twitter:card' content='summary_large_image'>
     <meta property='og:image' content='https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/assets/images/preview.png'>
     <link rel="image_src" href="https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/assets/images/preview.png" />
-    <title>Trails</title>
+    <title>Trails - Visualizing massive datasets with WebGL</title>
     <link rel="shortcut icon" href="./assets/images/favicon.ico" type="image/x-icon" />
     <script type="application/ld+json">
     {
@@ -24,8 +24,12 @@
     </script>
   </head>
   <body class='night-mode'>
+
     <noscript>Please enable JavaScript to run this app.</noscript>
+
+    <!-- Tooltip templates, displayed onclick -->
     <div id='templates'>
+
       <!-- Sample template for wiki pages -->
       <script type='x-html/x-template' id='tooltip-template'>
         <div class="wiki-bio row align-center">
@@ -60,8 +64,21 @@
           <p id='text'><%= decodeURIComponent(escape(metadata)) %></p>
         </div>
       </script>
+
+      <!-- Sample preview for images -->
+      <div class='preview' id='image-preview'>
+        <div class='preview-image'></div>
+      </div>
+
+      <!-- Sample preview for images with labels -->
+      <div class='preview' id='labelled-image-preview'>
+        <div class='preview-image'></div>
+        <div class='preview-label'></div>
+      </div>
+
     </div>
 
+    <!-- DOM elements -->
     <div id='elements'>
       <div id='lasso-button'></div>
       <div id='canvas-container'></div>
@@ -81,7 +98,6 @@
           </rect>
         </svg>
       </div>
-
       <a id='brand' href='https://dhlab.yale.edu' target='_blank'>@YALEDHLAB</a>
     </div>
 
