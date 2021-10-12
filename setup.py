@@ -31,6 +31,12 @@ setup(
   license='MIT',
   install_requires=[
     'glob2==0.7',
+    'numpy~=1.19.2',
+    'scikit-learn==0.24.2',
+    'tensorflow==2.6.0',
+    'tqdm==4.46.1',
+    'umap-learn==0.5.1',
+    'yale-dhlab-keras-preprocessing>=1.1.1',
   ],
   entry_points={
     'console_scripts': [

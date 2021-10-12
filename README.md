@@ -16,5 +16,8 @@ pip install https://github.com/yaledhlab/trails/archive/master.zip
 wget TODO
 
 # run the app
-trails -i "TODO"
+trails --inputs datasets/wikipedia-people/wiki-people-views.json \
+       --title "name"    \
+       --text "abstract" \
+       --limit 100
 ```

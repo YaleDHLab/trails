@@ -140,23 +140,27 @@ Points.prototype.init = function() {
   this.mesh = null;
   this.initialized = false;
   this.positions = [];
-  this.texts = [];
+  this.objects = [];
   this.n = 100000;
   this.cmap = state.points.colors === 'perlin'
     ? function() {return {r: 0, g: 0, b: 0}}
     : interpolateArray(colorScales[state.points.colors]);
   Promise.all([
-    fetch('assets/data/texts.json'),
-    fetch('assets/data/positions.json'),
+    fetch('data/objects.json'),
+    fetch('data/positions.json'),
+    fetch('data/colors.json'),
   ]).then(results => {
-    const [texts, positions] = results;
-    texts.json().then(textJson => {
-      this.texts = textJson;
+    const [objects, positions, colors] = results;
+    objects.json().then(json => {
+      this.objects = json;
       this.initialize();
     })
-    positions.json().then(positionJson => {
-      this.positions = positionJson.positions.slice(0, this.n);
-      this.colors = null; //positionJson.colors.slice(0, this.n);
+    colors.json().then(json => {
+      this.colors = json;
+      this.initialize();
+    })
+    positions.json().then(json => {
+      this.positions = json.slice(0, this.n);
       preview.createIndex(this.positions);
       var clickColor = new THREE.Color(),
           clickColors = new Float32Array(this.positions.length * 3),
@@ -231,7 +235,7 @@ Points.prototype.setAttribute = function(name, arr) {
 }
 
 Points.prototype.initialize = function() {
-  if (this.positions.length && this.texts.length) {
+  if (this.positions.length && this.objects.length) {
     this.initialized = true;
     document.querySelector('#loader').style.display = 'none';
   }
@@ -730,7 +734,7 @@ function Tooltip() {
 Tooltip.prototype.display = function(index) {
   clearTimeout(this.timeout);
   // bail if cell metadata isn't available
-  if (!points || !points.texts.length) return;
+  if (!points || !points.objects.length) return;
   // bail if the user requested the item we're already showing
   if (index === this.displayed) return;
   this.displayed = index;
@@ -756,7 +760,7 @@ Tooltip.prototype.close = function() {
 Tooltip.prototype.getTooltipHTML = function(index) {
   return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
-    metadata: points.texts[index],
+    metadata: points.objects[index],
   });
 }
 
@@ -803,7 +807,7 @@ Preview.prototype.select = function() {
     // don't stop 'til you get enough
     if (this.selected.length === this.n) break;
     // skip cells without images
-    if (!points.texts[index].thumb) continue;
+    if (!points.objects[index].thumb) continue;
     // create the cell object
     var world = {x: points.positions[index][0], y: points.positions[index][1]};
     var screen = worldToScreenCoords(world);
@@ -858,7 +862,7 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getPreviewHTML = function(index, delay) {
-  if (!points.texts) {
+  if (!points.objects) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
       this.getPreviewHTML(index)
@@ -866,7 +870,7 @@ Preview.prototype.getPreviewHTML = function(index, delay) {
     return;
   }
 
-  var meta = (points.texts || [])[index];
+  var meta = (points.objects || [])[index];
   console.log(' * getting preview', index, meta);
   if (!(meta.thumb)) return;
 
@@ -907,7 +911,7 @@ Preview.prototype.clear = function() {
 
 Preview.prototype.redraw = function() {
   clearTimeout(this.timeout);
-  if (points.texts.length > 0) {
+  if (points.objects.length > 0) {
     this.clear();
     this.select();
   // run the initial draw once the data becomes available
@@ -1140,8 +1144,8 @@ Lasso.prototype.draw = function() {
 
 Lasso.prototype.highlightSelected = function() {
   // create the attribute for the selected cells
-  var attr = new Float32Array(points.texts.length);
-  for (var i=0; i<points.texts.length; i++) {
+  var attr = new Float32Array(points.objects.length);
+  for (var i=0; i<points.objects.length; i++) {
     attr[i] = this.selected[i] ? 1.0 : 0.0;
   }
   points.setAttribute('selected', attr);
