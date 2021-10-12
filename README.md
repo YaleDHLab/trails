@@ -13,10 +13,10 @@ Trails aims to provide a flexible high-level tool capable of displaying massive 
 pip install https://github.com/yaledhlab/trails/archive/master.zip
 
 # download sample inputs
-wget TODO
+wget https://lab-data-collections.s3.amazonaws.com/wiki-people.json
 
 # run the app
-trails --inputs datasets/wikipedia-people/wiki-people-views.json --text "abstract" --sort views --limit 100
+trails --inputs datasets/wiki-people.json --text "abstract" --sort views --limit 100000
 ```
 
 # Customizing UI
