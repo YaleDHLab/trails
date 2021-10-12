@@ -63,7 +63,7 @@ a {
   right: 0;
   bottom: 0;
   left: 0;
-  background-image: url(/assets/images/paper.png);
+  background-image: url(assets/images/paper.png);
   opacity: 0.5;
   background-size: 100px;
 }

@@ -16,8 +16,9 @@ pip install https://github.com/yaledhlab/trails/archive/master.zip
 wget TODO
 
 # run the app
-trails --inputs datasets/wikipedia-people/wiki-people-views.json \
-       --title "name"    \
-       --text "abstract" \
-       --limit 100
+trails --inputs datasets/wikipedia-people/wiki-people-views.json --text "abstract" --sort views --limit 100
 ```
+
+# Customizing UI
+
+TODO: discuss PREVIEW_TEMPLATE & TOOLTIP_TEMPLATE in `output/index.html`

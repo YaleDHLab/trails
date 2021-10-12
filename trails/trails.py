@@ -13,9 +13,12 @@ import glob2
 import json
 import os
 
+'''
+TODO: Add --filter flag to remove objects without text/image properties
+'''
+
 config = {
   'inputs': None,
-  'title': None,
   'text': None,
   'limit': None,
   'sort': None,
@@ -30,7 +33,6 @@ def parse():
   description = 'Create the data required to create a Trails viewer'
   parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--inputs', '-i', type=str, default=config['inputs'], help='path to a glob of files to process', required=True)
-  parser.add_argument('--title', '-t', type=str, default=config['title'], help='field in metadata that contains object title', required=True)
   parser.add_argument('--text', '-c', type=str, default=config['text'], help='field in metadata that contains body text (for text objects)', required=True)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
@@ -62,10 +64,7 @@ def process(**kwargs):
 
 def get_objects(**kwargs):
   '''
-  Format inputs into a dictionary stream, each with the following attributes:
-
-  title: title attribute || filename
-  body: text content or image array
+  Format inputs into a dictionary stream
 
   Supported filetypes:
     * application/json
@@ -86,8 +85,8 @@ def get_objects(**kwargs):
       print('WARNING: Only JSON objects are currently supported')
   # optionally sort the objects
   if kwargs.get('sort'):
-    objects = [i for i in objects if i['meta'].get(kwargs['sort'], 'NO_SORT') != 'NO_SORT']
-    objects = sorted(objects, key=lambda i: i['meta'][kwargs['sort']], reverse=True)
+    default = '' if isinstance(kwargs['sort'], str) else 0
+    objects = sorted(objects, key=lambda i: i.get(kwargs['sort'], default), reverse=True)
   # optionally limit the objects
   if kwargs.get('limit'):
     objects = objects[:kwargs['limit']]
@@ -99,24 +98,10 @@ def get_json_objects(path, **kwargs):
     # handle the case that j is an array of objects
     if isinstance(j, list):
       for i in j:
-        o = get_json_object(i, **kwargs)
-        if o: yield o
+        yield i
     # handle the case that j is a single object
     elif isinstance(j, dict):
-      o = get_json_object(j, **kwargs)
-      if o: yield o
-
-def get_json_object(d, **kwargs):
-  used_keys = [kwargs[i] for i in ['title', 'text']]
-  unused_keys = [i for i in d.keys() if i not in used_keys]
-  try:
-    return {
-      'title': d[kwargs['title']],
-      'text':  d[kwargs['text']],
-      'meta': {i: d[i] for i in unused_keys},
-    }
-  except KeyError:
-    return None
+      yield j
 
 def get_mimetype(path, full=True):
   '''Given a filepath, return the mimetype'''
@@ -138,12 +123,7 @@ class Image(dict):
 
 def get_vectors(**kwargs):
   # TODO: create vector cache
-  if kwargs['vectorize'] == 'text':
-    text = [i['text'] for i in kwargs['objects']]
-    vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(text)
-    return NMF(n_components=100, max_iter=100, verbose=1).fit_transform(X)
-  elif kwargs['vectorize'] == 'image':
+  if kwargs['vectorize'] == 'image':
     base = InceptionV3(include_top=True, weights='imagenet',)
     model = Model(inputs=base.input, outputs=base.get_layer('avg_pool').output)
     vecs = []
@@ -154,6 +134,11 @@ def get_vectors(**kwargs):
         progress_bar.update(1)
         vecs.append(model.predict(np.expand_dims(im, 0)).squeeze())
     return vecs
+  elif kwargs['vectorize'] == 'text':
+    text = [i.get(kwargs['text'], '') for i in kwargs['objects']]
+    vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(text)
+    return NMF(n_components=100, max_iter=100, verbose=1).fit_transform(X)
 
 ##
 # UMAP
