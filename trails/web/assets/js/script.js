@@ -38,7 +38,7 @@ function World() {
   var start = {
     x: 0.0,
     y: 0.0,
-    z: 0.5,
+    z: 1,
   }
   var size = getCanvasSize();
   this.scene = new THREE.Scene();
@@ -791,10 +791,11 @@ function Preview() {
   this.hovered = null;
   this.n = state.previews.number;
   this.margin = 10;
-  this.size = state.previews.size;
   this.timeout = null;
   this.mouseTimeout = null;
-
+  this.elems = {
+    offscreen: document.querySelector('#offscreen'),
+  }
   this.requiredAttributes = this.getRequiredAttributes();
   this.addEventListeners();
 }
@@ -813,33 +814,30 @@ Preview.prototype.select = function() {
     if (this.selected.length === this.n) break;
     // ensure the current point has all required attributes
     var keep = true;
-    this.requiredAttributes.forEach(function(attr) {
-      if (!(points.objects[index][attr])) keep = false;
-    })
+    for (var j=0; j<this.requiredAttributes.length; j++) {
+      if (!(points.objects[index][this.requiredAttributes[j]])) {
+        keep = false;
+        break;
+      }
+    }
     if (!keep) continue;
-    // create the cell object
+    // create the point object
     var world = {x: points.positions[index][0], y: points.positions[index][1]};
     var screen = worldToScreenCoords(world);
     var d = {
       x: screen.x,
       y: screen.y,
       index: index,
+      elem: this.getPreviewHTML(index),
     };
-    // if the point is visible and doesn't overlap with others, add it
-    if (
-      world.x >= bounds.x[0] &&
-      world.x <= bounds.x[1] &&
-      world.y >= bounds.y[0] &&
-      world.y <= bounds.y[1] &&
-      !(this.overlaps(d))
-    ) {
-      d.elem = this.getPreviewHTML(d.index, `${Math.random()}s`);
-      if (d.elem) {
-        d.elem.style.left = d.x + 'px';
-        d.elem.style.top = d.y + 'px';
-        this.selected.push(d);
-      }
-    }
+    // ensure the elem exists
+    if (!d.elem) continue;
+    // ensure elem doesn't overlap with others
+    if (this.overlaps(d)) continue;
+    // add the elem to the list to be rendered
+    d.elem.style.left = d.x + 'px';
+    d.elem.style.top = d.y + 'px';
+    this.selected.push(d);
   }
   // render the selected ids; use documentfragment to prevent reflow after each child is added
   var elem = document.querySelector('#previews-container');
@@ -851,28 +849,36 @@ Preview.prototype.select = function() {
 }
 
 // a & b are objects with x,y attrs; d == x|y
-Preview.prototype.intersects = function(a, b, d) {
+Preview.prototype.intersects = function(a, b, d, size) {
   var a0 = a[d];
   var b0 = b[d];
-  var a1 = a[d] + this.size + this.margin;
-  var b1 = b[d] + this.size + this.margin;
+  var a1 = a[d] + size + this.margin;
+  var b1 = b[d] + size + this.margin;
   return a0 >= b0 && a0 <= b1 ||
          a1 >= b0 && a1 <= b1;
 }
 
 // given point d with attributes x, y determine if it overlaps other selected points
 Preview.prototype.overlaps = function(a) {
+  // get the height and width of a.elem
+  this.elems.offscreen.appendChild(a.elem);
+  var abb = a.elem.getBoundingClientRect();
+  var keep = true;
   for (var i=0; i<this.selected.length; i++) {
     var b = this.selected[i];
     if (
-      this.intersects(a, b, 'x') &&
-      this.intersects(a, b, 'y')
-    ) return true;
+      this.intersects(a, b, 'x', abb.width) &&
+      this.intersects(a, b, 'y', abb.height)
+    ) {
+      keep = false;
+      break;
+    };
   }
-  return false;
+  this.elems.offscreen.removeChild(a.elem);
+  return !keep;
 }
 
-Preview.prototype.getPreviewHTML = function(index, delay) {
+Preview.prototype.getPreviewHTML = function(index) {
   if (!points.objects) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
@@ -880,16 +886,13 @@ Preview.prototype.getPreviewHTML = function(index, delay) {
     }.bind(this), 500);
     return;
   }
-  // TODO: Bail if required attrs are missing
-  //if (!(meta.thumb)) return;
   var meta = (points.objects || [])[index];
-  console.log(' * getting preview', index, meta);
   // get html string
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
     data: points.objects[index],
   });
-  // conver to DOM Element
+  // convert to DOM Element
   var elem = htmlStringToDom(html);
   elem.id = 'preview-' + index;
   elem.onpointerdown = function(index, e) {
@@ -1503,7 +1506,7 @@ function GUI() {
   this.gui = new dat.GUI();
   // points
   var folder = this.gui.addFolder('Points');
-  folder.add(state.points, 'size', 0.0, 2.0).onChange(function(val) {
+  folder.add(state.points, 'size', 0.0, 20.0).onChange(function(val) {
     points.mesh.material.uniforms.size.value = val;
   }.bind(this));
   folder.add(state.points, 'colors', ['blues', 'plasma', 'viridis', 'magma', 'perlin']).onChange(function(val) {

@@ -138,7 +138,7 @@ def get_vectors(**kwargs):
     text = [i.get(kwargs['text'], '') for i in kwargs['objects']]
     vectorizer = TfidfVectorizer()
     X = vectorizer.fit_transform(text)
-    return NMF(n_components=100, max_iter=100, verbose=1).fit_transform(X)
+    return NMF(n_components=100, max_iter=100, verbose=1, init='nndsvd').fit_transform(X)
 
 ##
 # UMAP
