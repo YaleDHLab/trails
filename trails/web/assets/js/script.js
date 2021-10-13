@@ -3,8 +3,6 @@
  *  - recently viewed list
  *  - improve touchtexture sizing when zoomed in
  *  - set attribute of so points with previews have large size in gl
- *  - show name when hovering
- *  - prevent oval shaped size increase with rectangular viewports
  **/
 
 var dpi = window.devicePixelRatio || 1;
@@ -945,15 +943,6 @@ Preview.prototype.redraw = function() {
   }
 }
 
-// measure the delta between e and the position of this.mouse
-Preview.prototype.measurePointerMovement = function(e) {
-  var p = getEventScreenCoords(e);
-  return {
-    x: Math.abs(mouse.down.x - p.x),
-    y: Math.abs(mouse.down.y - p.y),
-  }
-}
-
 // display the hovered cell
 Preview.prototype.setHovered = function(id) {
   // prevent consecutive hovering selections
@@ -1026,6 +1015,15 @@ Preview.prototype.enlarge = function(id) {
   } else {
     elem.classList.remove('pulse');
     elem.classList.remove('show-label');
+  }
+}
+
+// measure the delta between e and the position of this.mouse
+Preview.prototype.measurePointerMovement = function(e) {
+  var p = getEventScreenCoords(e);
+  return {
+    x: Math.abs(mouse.down.x - p.x),
+    y: Math.abs(mouse.down.y - p.y),
   }
 }
 

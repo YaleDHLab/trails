@@ -84,7 +84,6 @@ a {
 
 .preview.hovered {
   z-index: 11;
-  animation-delay: 0s !important;
 }
 
 .preview-image {
@@ -126,6 +125,7 @@ a {
 
 .hovered .preview-image {
   animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
+  animation-delay: 0s !important;
 }
 
 body.night-mode .preview-image {

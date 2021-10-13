@@ -24,7 +24,8 @@
       <script type='x-html/x-template' id='preview-template'>
         <div class='preview'>
           <div class='preview-image paper-texture'
-            style='background-image: url("<%- data.thumbnail %>");'></div>
+            style='background-image: url("<%- data.thumbnail %>");
+                   animation-delay: <%- Math.random() + "s" %>'></div>
           <div class='preview-label paper-texture'><%= data.name.replaceAll('_', ' ') %></div>
         </div>
       </script>
