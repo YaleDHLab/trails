@@ -793,8 +793,11 @@ function Preview() {
   this.margin = 10;
   this.timeout = null;
   this.mouseTimeout = null;
+  this.sizes = {}; // size cache, maps id to width & height
   this.elems = {
     offscreen: document.querySelector('#offscreen'),
+    hovered: document.querySelector('#hovered-preview'),
+    cursor: document.querySelector('#cursor'),
   }
   this.requiredAttributes = this.getRequiredAttributes();
   this.addEventListeners();
@@ -848,42 +851,52 @@ Preview.prototype.select = function() {
   elem.appendChild(children);
 }
 
-// a & b are objects with x,y attrs; d == x|y
-Preview.prototype.intersects = function(a, b, d, size) {
-  var a0 = a[d];
-  var b0 = b[d];
-  var a1 = a[d] + size + this.margin;
-  var b1 = b[d] + size + this.margin;
+// a & b are objects with x,y,index,elem attrs; d == x|y
+Preview.prototype.intersects = function(a, b, d) {
+  var aS = this.getElementSize(a); // a size
+  var bS = this.getElementSize(b); // b size
+  var a0 = a[d]; // a starting pos
+  var b0 = b[d]; // b starting pos
+  var a1 = a[d] + (d === 'x' ? aS.width : aS.height) + this.margin; // a furthest extension
+  var b1 = b[d] + (d === 'x' ? bS.width : bS.height) + this.margin; // b furthest extension
   return a0 >= b0 && a0 <= b1 ||
          a1 >= b0 && a1 <= b1;
 }
 
-// given point d with attributes x, y determine if it overlaps other selected points
+// given point a with attributes x, y determine if it overlaps other selected points
 Preview.prototype.overlaps = function(a) {
-  // get the height and width of a.elem
-  this.elems.offscreen.appendChild(a.elem);
-  var abb = a.elem.getBoundingClientRect();
   var keep = true;
   for (var i=0; i<this.selected.length; i++) {
     var b = this.selected[i];
     if (
-      this.intersects(a, b, 'x', abb.width) &&
-      this.intersects(a, b, 'y', abb.height)
+      this.intersects(a, b, 'x') &&
+      this.intersects(a, b, 'y')
     ) {
       keep = false;
       break;
     };
   }
-  this.elems.offscreen.removeChild(a.elem);
   return !keep;
+}
+
+Preview.prototype.getElementSize = function(d) {
+  if (d.index in this.sizes) {
+    return this.sizes[d.index];
+  }
+  this.elems.offscreen.appendChild(d.elem);
+  var box = d.elem.getBoundingClientRect();
+  this.elems.offscreen.removeChild(d.elem);
+  this.sizes[d.index] = {
+    width: box.width,
+    height: box.height,
+  }
+  return this.sizes[d.index];
 }
 
 Preview.prototype.getPreviewHTML = function(index) {
   if (!points.objects) {
     clearTimeout(this.timeout);
-    this.timeout = setTimeout(function() {
-      this.getPreviewHTML(index)
-    }.bind(this), 500);
+    this.timeout = setTimeout(this.getPreviewHTML.bind(this, index), 500);
     return;
   }
   var meta = (points.objects || [])[index];
@@ -914,7 +927,7 @@ Preview.prototype.getPreviewHTML = function(index) {
 Preview.prototype.clear = function() {
   if (!this.selected.length) return;
   document.querySelector('#previews-container').innerHTML = '';
-  document.querySelector('#hovered-preview').innerHTML = '';
+  this.elems.hovered.innerHTML = '';
   this.hovered = null;
   this.selected = [];
 }
@@ -947,41 +960,46 @@ Preview.prototype.setHovered = function(id) {
   clearTimeout(this.mouseTimeout);
   // bail if we're being asked to show the cell we're already showing
   if (id === this.hovered) return;
+  // clear the old hovered state
+  var previous = document.querySelector('#preview-' + this.hovered);
+  if (previous) previous.classList.remove('hovered');
+  // set the hovered id
   this.hovered = id;
   // if the id is -1 clear the hovered cell
   if (id === -1) {
-    document.querySelector('#hovered-preview').innerHTML = '';
-  // else if this point is already previewed, update the claslist
+    this.elems.hovered.innerHTML = '';
+  // if this point is already previewed, update the element
   } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
     // set mouse offscreen to prevent touchtexture focus on point border
     mouse.set({x: -1000, y: -1000});
-    document.querySelector('#preview-' + id).classList.add('pulse');
-    document.querySelector('#preview-' + id).classList.add('show-label');
-    document.querySelector('#hovered-preview').innerHTML = '';
-  // otherwise create the element
+    document.querySelector('#preview-' + id).classList.add('hovered');
+    this.elems.hovered.innerHTML = '';
+  // if the point is not already previewed, create it
   } else {
     // otherwise show this cell
-    var elem = this.getPreviewHTML(id);
-    if (!elem) return console.log(' * preview unavailable', id);
+    var elem = this.getPreviewHTML(id, 'hovered');
+    if (!elem) return this.adjustStates();
+    elem.classList.add('hovered');
     elem.style.left = mouse.x + 'px';
     elem.style.top = mouse.y + 'px';
-    elem.classList.add('pulse');
-    elem.classList.add('show-label');
-    document.querySelector('#hovered-preview').innerHTML = '';
-    document.querySelector('#hovered-preview').appendChild(elem);
+    this.elems.hovered.innerHTML = '';
+    this.elems.hovered.appendChild(elem);
   }
   // shrink cells close to the mouse
   this.adjustStates();
 }
 
-// adjust the size of previews near the mouse
+// adjust the size of previews near the hovered elem
 Preview.prototype.adjustStates = function() {
+  var cursor = Object.assign({}, mouse, {
+    index: -1,
+    elem: this.elems.cursor,
+  })
   var overlapping = [];
-  var pos = Object.assign({}, mouse);
   for (var i=0; i<this.selected.length; i++) {
     (
-      this.intersects(pos, this.selected[i], 'x') &&
-      this.intersects(pos, this.selected[i], 'y') &&
+      this.intersects(cursor, this.selected[i], 'x') &&
+      this.intersects(cursor, this.selected[i], 'y') &&
       this.selected[i].index !== this.hovered
     )
       ? this.shrink(this.selected[i].index)
@@ -994,16 +1012,13 @@ Preview.prototype.shrink = function(id) {
   var elem = document.querySelector('#preview-' + id);
   elem.style.animationDelay = '0s';
   elem.classList.add('small');
-  elem.classList.remove('pulse');
-  elem.classList.remove('show-label');
+  elem.classList.remove('hovered');
 }
 
 // increase the size of a preview given the cell id
 Preview.prototype.enlarge = function(id) {
   var elem = document.querySelector('#preview-' + id);
-  if (elem.classList.contains('small')) {
-    elem.classList.remove('small');
-  }
+  elem.classList.remove('small');
   // add / remove the pulse class
   if (this.hovered === id) {
     elem.classList.add('pulse');

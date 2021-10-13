@@ -82,8 +82,9 @@ a {
   align-items: center;
 }
 
-.preview.show-label {
+.preview.hovered {
   z-index: 11;
+  animation-delay: 0s !important;
 }
 
 .preview-image {
@@ -104,12 +105,26 @@ a {
   height: 50px;
 }
 
+.preview-image::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(images/particle-texture.jpg);
+  opacity: 0.2;
+  border-radius: 100%;
+  background-size: 140px;
+  background-repeat: no-repeat;
+}
+
 .small .preview-image {
   animation-name: decrease-scale;
   animation-delay: 0s !important;
 }
 
-.pulse .preview-image {
+.hovered .preview-image {
   animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
 }
 
@@ -123,22 +138,8 @@ body.night-mode .preview-image {
               inset 0 0 0.325rem rgba(255, 255, 255, 0.4);
 }
 
-body.night-mode .pulse .preview-image {
+body.night-mode .hovered .preview-image {
   animation: increase-scale 0.3s forwards, pulse-light 2s infinite;
-}
-
-.preview-image::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background-image: url(images/particle-texture.jpg);
-  opacity: 0.2;
-  border-radius: 100%;
-  background-size: 140px;
-  background-repeat: no-repeat;
 }
 
 .preview-label {
@@ -154,9 +155,10 @@ body.night-mode .pulse .preview-image {
   box-shadow: 0 0 5px #333;
   background: #fff;
   color: #000;
+  pointer-events: none;
 }
 
-.preview.show-label .preview-label {
+.preview.hovered .preview-label {
   display: inline-block;
 }
 
@@ -564,4 +566,9 @@ noscript {
   position: absolute;
   top: -1000%;
   left: -1000%;
+}
+
+#cursor {
+  width: 30px;
+  height: 30px;
 }
