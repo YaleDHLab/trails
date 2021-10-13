@@ -53,12 +53,34 @@ a {
 }
 
 /**
+ * Textures
+ **/
+
+.paper-texture::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(assets/images/paper.png);
+  opacity: 0.5;
+  background-size: 100px;
+}
+
+/**
 * Preview
 **/
 
 .preview {
   position: absolute;
   z-index: 10;
+  height: 0;
+  width: 0;
+}
+
+.preview.show-label {
+  z-index: 11;
 }
 
 .preview-image {
@@ -74,6 +96,16 @@ a {
   animation-fill-mode: forwards;
   animation-timing-function: cubic-bezier(.22,1.16,.69,1.28);
   transform: translate(-50%, -50%) scale(0.01);
+  overflow: hidden;
+}
+
+.small .preview-image {
+  animation-name: decrease-scale;
+  animation-delay: 0s !important;
+}
+
+.pulse .preview-image {
+  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
 }
 
 body.night-mode .preview-image {
@@ -84,15 +116,6 @@ body.night-mode .preview-image {
               0 0 0.2rem rgba(255, 255, 255, 0.4),
               0 0 0.7rem rgba(255, 255, 255, 0.4),
               inset 0 0 0.325rem rgba(255, 255, 255, 0.4);
-}
-
-.small .preview-image {
-  animation-name: decrease-scale;
-  animation-delay: 0s !important;
-}
-
-.pulse .preview-image {
-  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
 }
 
 body.night-mode .pulse .preview-image {
@@ -118,18 +141,17 @@ body.night-mode .pulse .preview-image {
   top: 30px;
   left: 0;
   transform: translateX(-50%);
-  background: #fff;
-  padding: 4px;
-  font-size: 12px;
-  font-family: courier;
+  background-color: #fff;
+  padding: 2px 5px;
+  font-size: 11px;
+  font-family: 'Noto Sans Display', sans-serif;
+  text-transform: uppercase;
   animation: swing-z 1.5s forwards;
-  border-radius: 3px;
   white-space: nowrap;
   display: none;
-}
-
-.preview.show-label {
-  z-index: 1000;
+  box-shadow: 0 0 5px #333;
+  background: #fff;
+  color: #000;
 }
 
 .preview.show-label .preview-label {
@@ -266,7 +288,6 @@ body.night-mode .tooltip-hover {
 .wiki-bio {
   width: 0px;
   height: 0px;
-  background: #e0e0e0;
   padding: 10px;
   box-sizing: border-box;
   font-family: Arial;
@@ -276,6 +297,7 @@ body.night-mode .tooltip-hover {
   transform: translate(-50%, -50%);
   overflow: hidden;
   border-radius: 100%;
+  background-size: 130px;
 }
 
 .wiki-bio > * {
@@ -309,10 +331,10 @@ body.night-mode .tooltip-hover {
 
 @keyframes lighten {
   0% {
-    background: #383838;
+    background-color: #383838;
   }
   100% {
-    background: #f1f1f1;
+    background-color: #fff;
   }
 }
 
@@ -529,6 +551,5 @@ noscript {
   color: #fff;
   display: flex;
   flex-direction: row;
-  z-index: 1000;
   font-family: courier;
 }

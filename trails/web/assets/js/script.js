@@ -80,7 +80,7 @@ function World() {
   this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
   this.controls.target.x = start.x;
   this.controls.target.y = start.y;
-  this.controls.maxDistance = 0.5;
+  this.controls.maxDistance = 0.8;
   this.controls.noRotate = true;
   this.addEventListeners();
 }
@@ -140,67 +140,28 @@ Points.prototype.init = function() {
   this.mesh = null;
   this.initialized = false;
   this.positions = [];
-  this.texts = [];
+  this.objects = [];
+  this.colors = [];
   this.n = 100000;
   this.cmap = state.points.colors === 'perlin'
     ? function() {return {r: 0, g: 0, b: 0}}
     : interpolateArray(colorScales[state.points.colors]);
   Promise.all([
-    fetch('assets/data/texts.json'),
-    fetch('assets/data/positions.json'),
+    fetch('data/objects.json'),
+    fetch('data/positions.json'),
+    fetch('data/colors.json'),
   ]).then(results => {
-    const [texts, positions] = results;
-    texts.json().then(textJson => {
-      this.texts = textJson;
+    const [objects, positions, colors] = results;
+    objects.json().then(json => {
+      this.objects = json.slice(0, this.n);
       this.initialize();
     })
-    positions.json().then(positionJson => {
-      this.positions = positionJson.positions.slice(0, this.n);
-      this.colors = positionJson.colors.slice(0, this.n);
-      preview.createIndex(this.positions);
-      var clickColor = new THREE.Color(),
-          clickColors = new Float32Array(this.positions.length * 3),
-          colors = new Float32Array(this.positions.length * 3),
-          translations = new Float32Array(this.positions.length * 3),
-          selected = new Float32Array(this.positions.length * 1),
-          translationIterator = 0,
-          colorIterator = 0,
-          clickColorIterator = 0;
-      for (var i=0; i<this.positions.length; i++) {
-        clickColor.setHex(i + 1);
-        var color = this.cmap((this.colors || {})[i] || 0);
-        translations[translationIterator++] = this.positions[i][0];
-        translations[translationIterator++] = this.positions[i][1];
-        translations[translationIterator++] = 0;
-        colors[colorIterator++] = color.r;
-        colors[colorIterator++] = color.g;
-        colors[colorIterator++] = color.b;
-        clickColors[clickColorIterator++] = clickColor.r;
-        clickColors[clickColorIterator++] = clickColor.g;
-        clickColors[clickColorIterator++] = clickColor.b;
-      }
-      // create the geometry
-      var geometry = new THREE.InstancedBufferGeometry();
-      var position = new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3);
-      var translation = new THREE.InstancedBufferAttribute(translations, 3, false, 1);
-      var color = new THREE.InstancedBufferAttribute(colors, 3, false, 1);
-      var clickColor = new THREE.InstancedBufferAttribute(clickColors, 3, false, 1);
-      var selected = new THREE.InstancedBufferAttribute(selected, 1, false, 1);
-      geometry.setAttribute('position', position);
-      geometry.setAttribute('translation', translation);
-      geometry.setAttribute('color', color);
-      geometry.setAttribute('clickColor', clickColor);
-      geometry.setAttribute('selected', selected);
-      // build the mesh
-      this.mesh = new THREE.Points(geometry, this.getMaterial());
-      this.mesh.frustumCulled = false;
-      world.scene.add(this.mesh);
-      // initialize downstream layers that depend on this mesh
-      picker.init();
-      preview.timeout = setTimeout(function() {
-        preview.redraw();
-      }.bind(preview), 1000)
-      // flip the initialization bool
+    colors.json().then(json => {
+      this.colors = json.slice(0, this.n);
+      this.initialize();
+    })
+    positions.json().then(json => {
+      this.positions = json.slice(0, this.n);
       this.initialize();
     })
   })
@@ -231,10 +192,56 @@ Points.prototype.setAttribute = function(name, arr) {
 }
 
 Points.prototype.initialize = function() {
-  if (this.positions.length && this.texts.length) {
+  if (this.positions.length && this.objects.length && this.colors.length) {
+    this.createMesh();
+    // initialize downstream layers that depend on this mesh
+    picker.init();
+    preview.timeout = setTimeout(preview.redraw.bind(preview), 1000);
+    // flip the initialized attr
     this.initialized = true;
     document.querySelector('#loader').style.display = 'none';
   }
+}
+
+Points.prototype.createMesh = function() {
+  preview.createIndex(this.positions);
+  var clickColor = new THREE.Color(),
+      clickColors = new Float32Array(this.positions.length * 3),
+      colors = new Float32Array(this.positions.length * 3),
+      translations = new Float32Array(this.positions.length * 3),
+      selected = new Float32Array(this.positions.length * 1),
+      translationIterator = 0,
+      colorIterator = 0,
+      clickColorIterator = 0;
+  for (var i=0; i<this.positions.length; i++) {
+    clickColor.setHex(i + 1);
+    var color = this.cmap((this.colors || {})[i] || Math.random());
+    translations[translationIterator++] = this.positions[i][0];
+    translations[translationIterator++] = this.positions[i][1];
+    translations[translationIterator++] = 0;
+    colors[colorIterator++] = color.r;
+    colors[colorIterator++] = color.g;
+    colors[colorIterator++] = color.b;
+    clickColors[clickColorIterator++] = clickColor.r;
+    clickColors[clickColorIterator++] = clickColor.g;
+    clickColors[clickColorIterator++] = clickColor.b;
+  }
+  // create the geometry
+  var geometry = new THREE.InstancedBufferGeometry();
+  var position = new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3);
+  var translation = new THREE.InstancedBufferAttribute(translations, 3, false, 1);
+  var color = new THREE.InstancedBufferAttribute(colors, 3, false, 1);
+  var clickColor = new THREE.InstancedBufferAttribute(clickColors, 3, false, 1);
+  var selected = new THREE.InstancedBufferAttribute(selected, 1, false, 1);
+  geometry.setAttribute('position', position);
+  geometry.setAttribute('translation', translation);
+  geometry.setAttribute('color', color);
+  geometry.setAttribute('clickColor', clickColor);
+  geometry.setAttribute('selected', selected);
+  // build the mesh
+  this.mesh = new THREE.Points(geometry, this.getMaterial());
+  this.mesh.frustumCulled = false;
+  world.scene.add(this.mesh);
 }
 
 Points.prototype.getMaterial = function() {
@@ -730,7 +737,7 @@ function Tooltip() {
 Tooltip.prototype.display = function(index) {
   clearTimeout(this.timeout);
   // bail if cell metadata isn't available
-  if (!points || !points.texts.length) return;
+  if (!points || !points.objects.length) return;
   // bail if the user requested the item we're already showing
   if (index === this.displayed) return;
   this.displayed = index;
@@ -756,7 +763,7 @@ Tooltip.prototype.close = function() {
 Tooltip.prototype.getTooltipHTML = function(index) {
   return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
-    metadata: points.texts[index],
+    data: points.objects[index],
   });
 }
 
@@ -780,30 +787,36 @@ Tooltip.prototype.addEventListeners = function() {
 
 function Preview() {
   this.selected = [];
+  this.kdbush = null;
   this.hovered = null;
   this.n = state.previews.number;
   this.margin = 10;
   this.size = state.previews.size;
   this.timeout = null;
   this.mouseTimeout = null;
+
+  this.requiredAttributes = this.getRequiredAttributes();
   this.addEventListeners();
-  this.index = null;
 }
 
 Preview.prototype.createIndex = function(positions) {
-  this.index = new KDBush(positions);
+  this.kdbush = new KDBush(positions);
 }
 
 // select the set of this.n previews to show
 Preview.prototype.select = function() {
   var bounds = getWorldBounds();
-  var indices = this.index.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort((a, b) => a-b);
+  var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort((a, b) => a-b);
   for (var i=0; i<indices.length; i++) {
     var index = indices[i];
     // don't stop 'til you get enough
     if (this.selected.length === this.n) break;
-    // skip cells without images
-    if (!points.texts[index].thumb) continue;
+    // ensure the current point has all required attributes
+    var keep = true;
+    this.requiredAttributes.forEach(function(attr) {
+      if (!(points.objects[index][attr])) keep = false;
+    })
+    if (!keep) continue;
     // create the cell object
     var world = {x: points.positions[index][0], y: points.positions[index][1]};
     var screen = worldToScreenCoords(world);
@@ -821,9 +834,11 @@ Preview.prototype.select = function() {
       !(this.overlaps(d))
     ) {
       d.elem = this.getPreviewHTML(d.index, `${Math.random()}s`);
-      d.elem.style.left = d.x + 'px';
-      d.elem.style.top = d.y + 'px';
-      this.selected.push(d);
+      if (d.elem) {
+        d.elem.style.left = d.x + 'px';
+        d.elem.style.top = d.y + 'px';
+        this.selected.push(d);
+      }
     }
   }
   // render the selected ids; use documentfragment to prevent reflow after each child is added
@@ -858,39 +873,39 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getPreviewHTML = function(index, delay) {
-  var meta = (points.texts || [])[index];
-  if (!meta || !meta.thumb) {
+  if (!points.objects) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(function() {
       this.getPreviewHTML(index)
     }.bind(this), 500);
     return;
   }
-  var div = document.querySelector('#labelled-image-preview').cloneNode(true);
-  div.id = 'preview-' + index;
-  // style the image component
-  var img = div.querySelector('.preview-image');
-  if (delay) img.style.animationDelay = delay;
-  img.style.height = this.size + 'px';
-  img.style.width = this.size + 'px';
-  img.style.backgroundImage = `url("${decodeURIComponent(meta.thumb)}")`;
-  img.onpointerdown = function(index, e) {
+  // TODO: Bail if required attrs are missing
+  //if (!(meta.thumb)) return;
+  var meta = (points.objects || [])[index];
+  console.log(' * getting preview', index, meta);
+  // get html string
+  var html = _.template(document.querySelector('#preview-template').innerHTML)({
+    index: index,
+    data: points.objects[index],
+  });
+  // conver to DOM Element
+  var elem = htmlStringToDom(html);
+  elem.id = 'preview-' + index;
+  elem.onpointerdown = function(index, e) {
     // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
     mouse.set(e);
     tooltip.display(index);
     e.stopPropagation();
   }.bind(this, index);
-  img.onpointermove = function(index, e) {
+  elem.onpointermove = function(index, e) {
     this.setHovered(index);
     // stop propagation to prevent the picker from selecting an adjacent cell
     e.stopPropagation();
     // pass this event to the touchtexture to facilitate trails
     touchtexture.handlePointerMove(e);
   }.bind(this, index);
-  // style the label component
-  var label = div.querySelector('.preview-label');
-  label.textContent = meta.name.replaceAll('_', ' ');
-  return div;
+  return elem;
 }
 
 Preview.prototype.clear = function() {
@@ -903,7 +918,7 @@ Preview.prototype.clear = function() {
 
 Preview.prototype.redraw = function() {
   clearTimeout(this.timeout);
-  if (points.texts.length > 0) {
+  if (points.objects.length > 0) {
     this.clear();
     this.select();
   // run the initial draw once the data becomes available
@@ -915,7 +930,7 @@ Preview.prototype.redraw = function() {
 }
 
 // measure the delta between e and the position of this.mouse
-Preview.prototype.measurepointermovement = function(e) {
+Preview.prototype.measurePointerMovement = function(e) {
   var p = getEventScreenCoords(e);
   return {
     x: Math.abs(mouse.down.x - p.x),
@@ -933,7 +948,7 @@ Preview.prototype.setHovered = function(id) {
   // if the id is -1 clear the hovered cell
   if (id === -1) {
     document.querySelector('#hovered-preview').innerHTML = '';
-  // else if the id is in this.selected, just update the claslist
+  // else if this point is already previewed, update the claslist
   } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
     // set mouse offscreen to prevent touchtexture focus on point border
     mouse.set({x: -1000, y: -1000});
@@ -944,6 +959,7 @@ Preview.prototype.setHovered = function(id) {
   } else {
     // otherwise show this cell
     var elem = this.getPreviewHTML(id);
+    if (!elem) return console.log(' * preview unavailable', id);
     elem.style.left = mouse.x + 'px';
     elem.style.top = mouse.y + 'px';
     elem.classList.add('pulse');
@@ -1014,10 +1030,10 @@ Preview.prototype.handleMouseMove = function(e) {
   // if the mouse is down and we're dragging, clear the board
   if (mouse.down) {
     // if the user has dragged too far clear
-    var d = this.measurepointermovement(e);
+    var d = this.measurePointerMovement(e);
     // do nothing if click is not on canvas
     if (world.renderer.domElement.contains(e.target)) {
-      if (d.x > 2 || d.y > 2) {
+      if (d.x > 1 || d.y > 1) {
         mouse.dragging = true;
         this.clear();
       }
@@ -1057,6 +1073,20 @@ Preview.prototype.addEventListeners = function() {
 
   window.addEventListener('resize', this.handleResize.bind(this))
   window.addEventListener('wheel', this.handleWheel.bind(this), { passive: true })
+}
+
+Preview.prototype.getRequiredAttributes = function() {
+  var template = document.querySelector('#preview-template').innerHTML;
+  var words = [];
+  template.split(' ').forEach(function(word) {
+    if (word.includes('data.')) {
+      word = word.split('data.')[1];
+      word = word.split(')')[0];
+      word = word.split('.')[0];
+      words.push(word);
+    }
+  })
+  return words;
 }
 
 /**
@@ -1132,8 +1162,8 @@ Lasso.prototype.draw = function() {
 
 Lasso.prototype.highlightSelected = function() {
   // create the attribute for the selected cells
-  var attr = new Float32Array(points.texts.length);
-  for (var i=0; i<points.texts.length; i++) {
+  var attr = new Float32Array(points.objects.length);
+  for (var i=0; i<points.objects.length; i++) {
     attr[i] = this.selected[i] ? 1.0 : 0.0;
   }
   points.setAttribute('selected', attr);
@@ -1596,6 +1626,12 @@ function getTexture(src) {
   });
   image.src = src;
   return tex;
+}
+
+function htmlStringToDom(s) {
+  var wrapper = document.createElement('div');
+  wrapper.innerHTML = s;
+  return wrapper.firstChild.nextSibling;
 }
 
 /**
