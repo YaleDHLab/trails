@@ -1,8 +1,6 @@
 # Trails
 
-> Visualizing massive datasets with WebGL.
-
-Trails aims to provide a flexible high-level tool capable of displaying massive visualizations using WebGL. 
+> Trails builds interactive plots of massive datasets.
 
 ![App preview](/trails/web/assets/images/preview.png?raw=true)
 
@@ -10,15 +8,15 @@ Trails aims to provide a flexible high-level tool capable of displaying massive 
 
 ```
 # install the app
-pip install https://github.com/yaledhlab/trails/archive/master.zip
+pip install git+https://github.com/YaleDHLab/trails.git
 
-# download sample inputs
+# download a sample dataset of wikipedia people
 wget https://lab-data-collections.s3.amazonaws.com/wiki-people.json
 
-# run the app
-trails --inputs datasets/wiki-people.json --text "abstract" --sort views --limit 100000
+# process the wiki-people.json file using the "abstract" field for vectorization
+trails --input "wiki-people.json" --text "abstract"
 ```
 
 # Customizing UI
 
-TODO: discuss PREVIEW_TEMPLATE & TOOLTIP_TEMPLATE in `output/index.html`
+TODO
