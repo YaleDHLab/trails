@@ -3,8 +3,6 @@
  *  - recently viewed list
  *  - improve touchtexture sizing when zoomed in
  *  - set attribute of so points with previews have large size in gl
- *  - show name when hovering
- *  - prevent oval shaped size increase with rectangular viewports
  **/
 
 var dpi = window.devicePixelRatio || 1;
@@ -38,7 +36,7 @@ function World() {
   var start = {
     x: 0.0,
     y: 0.0,
-    z: 0.5,
+    z: 1,
   }
   var size = getCanvasSize();
   this.scene = new THREE.Scene();
@@ -791,10 +789,14 @@ function Preview() {
   this.hovered = null;
   this.n = state.previews.number;
   this.margin = 10;
-  this.size = state.previews.size;
   this.timeout = null;
   this.mouseTimeout = null;
-
+  this.sizes = {}; // size cache, maps id to width & height
+  this.elems = {
+    offscreen: document.querySelector('#offscreen'),
+    hovered: document.querySelector('#hovered-preview'),
+    cursor: document.querySelector('#cursor'),
+  }
   this.requiredAttributes = this.getRequiredAttributes();
   this.addEventListeners();
 }
@@ -813,33 +815,30 @@ Preview.prototype.select = function() {
     if (this.selected.length === this.n) break;
     // ensure the current point has all required attributes
     var keep = true;
-    this.requiredAttributes.forEach(function(attr) {
-      if (!(points.objects[index][attr])) keep = false;
-    })
+    for (var j=0; j<this.requiredAttributes.length; j++) {
+      if (!(points.objects[index][this.requiredAttributes[j]])) {
+        keep = false;
+        break;
+      }
+    }
     if (!keep) continue;
-    // create the cell object
+    // create the point object
     var world = {x: points.positions[index][0], y: points.positions[index][1]};
     var screen = worldToScreenCoords(world);
     var d = {
       x: screen.x,
       y: screen.y,
       index: index,
+      elem: this.getPreviewHTML(index),
     };
-    // if the point is visible and doesn't overlap with others, add it
-    if (
-      world.x >= bounds.x[0] &&
-      world.x <= bounds.x[1] &&
-      world.y >= bounds.y[0] &&
-      world.y <= bounds.y[1] &&
-      !(this.overlaps(d))
-    ) {
-      d.elem = this.getPreviewHTML(d.index, `${Math.random()}s`);
-      if (d.elem) {
-        d.elem.style.left = d.x + 'px';
-        d.elem.style.top = d.y + 'px';
-        this.selected.push(d);
-      }
-    }
+    // ensure the elem exists
+    if (!d.elem) continue;
+    // ensure elem doesn't overlap with others
+    if (this.overlaps(d)) continue;
+    // add the elem to the list to be rendered
+    d.elem.style.left = d.x + 'px';
+    d.elem.style.top = d.y + 'px';
+    this.selected.push(d);
   }
   // render the selected ids; use documentfragment to prevent reflow after each child is added
   var elem = document.querySelector('#previews-container');
@@ -850,46 +849,61 @@ Preview.prototype.select = function() {
   elem.appendChild(children);
 }
 
-// a & b are objects with x,y attrs; d == x|y
+// a & b are objects with x,y,index,elem attrs; d == x|y
 Preview.prototype.intersects = function(a, b, d) {
-  var a0 = a[d];
-  var b0 = b[d];
-  var a1 = a[d] + this.size + this.margin;
-  var b1 = b[d] + this.size + this.margin;
+  var aS = this.getElementSize(a); // a size
+  var bS = this.getElementSize(b); // b size
+  var a0 = a[d]; // a starting pos
+  var b0 = b[d]; // b starting pos
+  var a1 = a[d] + (d === 'x' ? aS.width : aS.height) + this.margin; // a furthest extension
+  var b1 = b[d] + (d === 'x' ? bS.width : bS.height) + this.margin; // b furthest extension
   return a0 >= b0 && a0 <= b1 ||
          a1 >= b0 && a1 <= b1;
 }
 
-// given point d with attributes x, y determine if it overlaps other selected points
+// given point a with attributes x, y determine if it overlaps other selected points
 Preview.prototype.overlaps = function(a) {
+  var keep = true;
   for (var i=0; i<this.selected.length; i++) {
     var b = this.selected[i];
     if (
       this.intersects(a, b, 'x') &&
       this.intersects(a, b, 'y')
-    ) return true;
+    ) {
+      keep = false;
+      break;
+    };
   }
-  return false;
+  return !keep;
 }
 
-Preview.prototype.getPreviewHTML = function(index, delay) {
+Preview.prototype.getElementSize = function(d) {
+  if (d.index in this.sizes) {
+    return this.sizes[d.index];
+  }
+  this.elems.offscreen.appendChild(d.elem);
+  var box = d.elem.getBoundingClientRect();
+  this.elems.offscreen.removeChild(d.elem);
+  this.sizes[d.index] = {
+    width: box.width,
+    height: box.height,
+  }
+  return this.sizes[d.index];
+}
+
+Preview.prototype.getPreviewHTML = function(index) {
   if (!points.objects) {
     clearTimeout(this.timeout);
-    this.timeout = setTimeout(function() {
-      this.getPreviewHTML(index)
-    }.bind(this), 500);
+    this.timeout = setTimeout(this.getPreviewHTML.bind(this, index), 500);
     return;
   }
-  // TODO: Bail if required attrs are missing
-  //if (!(meta.thumb)) return;
   var meta = (points.objects || [])[index];
-  console.log(' * getting preview', index, meta);
   // get html string
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
     data: points.objects[index],
   });
-  // conver to DOM Element
+  // convert to DOM Element
   var elem = htmlStringToDom(html);
   elem.id = 'preview-' + index;
   elem.onpointerdown = function(index, e) {
@@ -911,7 +925,7 @@ Preview.prototype.getPreviewHTML = function(index, delay) {
 Preview.prototype.clear = function() {
   if (!this.selected.length) return;
   document.querySelector('#previews-container').innerHTML = '';
-  document.querySelector('#hovered-preview').innerHTML = '';
+  this.elems.hovered.innerHTML = '';
   this.hovered = null;
   this.selected = [];
 }
@@ -929,56 +943,52 @@ Preview.prototype.redraw = function() {
   }
 }
 
-// measure the delta between e and the position of this.mouse
-Preview.prototype.measurePointerMovement = function(e) {
-  var p = getEventScreenCoords(e);
-  return {
-    x: Math.abs(mouse.down.x - p.x),
-    y: Math.abs(mouse.down.y - p.y),
-  }
-}
-
 // display the hovered cell
 Preview.prototype.setHovered = function(id) {
   // prevent consecutive hovering selections
   clearTimeout(this.mouseTimeout);
   // bail if we're being asked to show the cell we're already showing
   if (id === this.hovered) return;
+  // clear the old hovered state
+  var previous = document.querySelector('#preview-' + this.hovered);
+  if (previous) previous.classList.remove('hovered');
+  // set the hovered id
   this.hovered = id;
   // if the id is -1 clear the hovered cell
   if (id === -1) {
-    document.querySelector('#hovered-preview').innerHTML = '';
-  // else if this point is already previewed, update the claslist
+    this.elems.hovered.innerHTML = '';
+  // if this point is already previewed, update the element
   } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
     // set mouse offscreen to prevent touchtexture focus on point border
     mouse.set({x: -1000, y: -1000});
-    document.querySelector('#preview-' + id).classList.add('pulse');
-    document.querySelector('#preview-' + id).classList.add('show-label');
-    document.querySelector('#hovered-preview').innerHTML = '';
-  // otherwise create the element
+    document.querySelector('#preview-' + id).classList.add('hovered');
+    this.elems.hovered.innerHTML = '';
+  // if the point is not already previewed, create it
   } else {
     // otherwise show this cell
-    var elem = this.getPreviewHTML(id);
-    if (!elem) return console.log(' * preview unavailable', id);
+    var elem = this.getPreviewHTML(id, 'hovered');
+    if (!elem) return this.adjustStates();
+    elem.classList.add('hovered');
     elem.style.left = mouse.x + 'px';
     elem.style.top = mouse.y + 'px';
-    elem.classList.add('pulse');
-    elem.classList.add('show-label');
-    document.querySelector('#hovered-preview').innerHTML = '';
-    document.querySelector('#hovered-preview').appendChild(elem);
+    this.elems.hovered.innerHTML = '';
+    this.elems.hovered.appendChild(elem);
   }
   // shrink cells close to the mouse
   this.adjustStates();
 }
 
-// adjust the size of previews near the mouse
+// adjust the size of previews near the hovered elem
 Preview.prototype.adjustStates = function() {
+  var cursor = Object.assign({}, mouse, {
+    index: -1,
+    elem: this.elems.cursor,
+  })
   var overlapping = [];
-  var pos = Object.assign({}, mouse);
   for (var i=0; i<this.selected.length; i++) {
     (
-      this.intersects(pos, this.selected[i], 'x') &&
-      this.intersects(pos, this.selected[i], 'y') &&
+      this.intersects(cursor, this.selected[i], 'x') &&
+      this.intersects(cursor, this.selected[i], 'y') &&
       this.selected[i].index !== this.hovered
     )
       ? this.shrink(this.selected[i].index)
@@ -991,16 +1001,13 @@ Preview.prototype.shrink = function(id) {
   var elem = document.querySelector('#preview-' + id);
   elem.style.animationDelay = '0s';
   elem.classList.add('small');
-  elem.classList.remove('pulse');
-  elem.classList.remove('show-label');
+  elem.classList.remove('hovered');
 }
 
 // increase the size of a preview given the cell id
 Preview.prototype.enlarge = function(id) {
   var elem = document.querySelector('#preview-' + id);
-  if (elem.classList.contains('small')) {
-    elem.classList.remove('small');
-  }
+  elem.classList.remove('small');
   // add / remove the pulse class
   if (this.hovered === id) {
     elem.classList.add('pulse');
@@ -1008,6 +1015,15 @@ Preview.prototype.enlarge = function(id) {
   } else {
     elem.classList.remove('pulse');
     elem.classList.remove('show-label');
+  }
+}
+
+// measure the delta between e and the position of this.mouse
+Preview.prototype.measurePointerMovement = function(e) {
+  var p = getEventScreenCoords(e);
+  return {
+    x: Math.abs(mouse.down.x - p.x),
+    y: Math.abs(mouse.down.y - p.y),
   }
 }
 
@@ -1503,7 +1519,7 @@ function GUI() {
   this.gui = new dat.GUI();
   // points
   var folder = this.gui.addFolder('Points');
-  folder.add(state.points, 'size', 0.0, 2.0).onChange(function(val) {
+  folder.add(state.points, 'size', 0.0, 20.0).onChange(function(val) {
     points.mesh.material.uniforms.size.value = val;
   }.bind(this));
   folder.add(state.points, 'colors', ['blues', 'plasma', 'viridis', 'magma', 'perlin']).onChange(function(val) {
