@@ -15,6 +15,7 @@ function State() {
   this.points = {
     size: 1.0,
     colors: 'blues',
+    glow: false,
   };
   this.previews = {
     number: 50,
@@ -110,7 +111,7 @@ World.prototype.useDayMode = function() {
 
 World.prototype.render = function() {
   requestAnimationFrame(this.render.bind(this));
-  if (points.initialized && points.mesh.material.uniforms.useNightMode.value > 0.5) {
+  if (points.initialized && state.points.glow) {
     this.composer.render();
   } else {
     this.renderer.render(world.scene, world.camera);
@@ -140,40 +141,48 @@ Points.prototype.init = function() {
   this.positions = [];
   this.objects = [];
   this.colors = [];
-  this.n = 100000;
-  this.cmap = state.points.colors === 'perlin'
-    ? function() {return {r: 0, g: 0, b: 0}}
-    : interpolateArray(colorScales[state.points.colors]);
+  this.n = null;
+  this.max = 150000;
   Promise.all([
     fetch('data/objects.json'),
     fetch('data/positions.json'),
     fetch('data/colors.json'),
   ]).then(results => {
     const [objects, positions, colors] = results;
-    objects.json().then(json => {
-      this.objects = json.slice(0, this.n);
-      this.initialize();
-    })
-    colors.json().then(json => {
-      this.colors = json.slice(0, this.n);
-      this.initialize();
-    })
-    positions.json().then(json => {
-      this.positions = json.slice(0, this.n);
-      this.initialize();
-    })
+    this.handleDataJson('objects', objects);
+    this.handleDataJson('positions', positions);
+    this.handleDataJson('colors', colors);
+  })
+}
+
+Points.prototype.handleDataJson = function(attr, response) {
+  if (response.status === 200) response.json().then(json => {
+    this[attr] = json.slice(0, this.max);
+    this.n = this[attr].length;
+    this.initialize();
   })
 }
 
 Points.prototype.setColors = function(val) {
+  // handle the case of 1d colors
+  if (typeof this.colors[0] !== 'object') {
+    this.cmap = interpolateArray(colorScales[val]);
+  }
+  // set perlin uniform
   if (val === 'perlin') {
     this.mesh.material.uniforms.usePerlin.value = 1.0;
+  // create non-perlin color attributes
   } else {
-    this.cmap = interpolateArray(colorScales[val]);
     var colors = new Float32Array(this.positions.length * 3),
         index = 0;
-    for (var i=0; i<this.positions.length; i++) {
-      var color = this.cmap((this.colors || {})[i] || 0);
+    for (var i=0; i<this.colors.length; i++) {
+      var color = this.colors[i].length === 3
+        ? {
+            r: this.colors[i][0]/255,
+            g: this.colors[i][1]/255,
+            b: this.colors[i][2]/255,
+          }
+        : this.cmap((this.colors || {})[i] || 0);
       colors[index++] = color.r;
       colors[index++] = color.g;
       colors[index++] = color.b;
@@ -213,13 +222,9 @@ Points.prototype.createMesh = function() {
       clickColorIterator = 0;
   for (var i=0; i<this.positions.length; i++) {
     clickColor.setHex(i + 1);
-    var color = this.cmap((this.colors || {})[i] || Math.random());
     translations[translationIterator++] = this.positions[i][0];
     translations[translationIterator++] = this.positions[i][1];
     translations[translationIterator++] = 0;
-    colors[colorIterator++] = color.r;
-    colors[colorIterator++] = color.g;
-    colors[colorIterator++] = color.b;
     clickColors[clickColorIterator++] = clickColor.r;
     clickColors[clickColorIterator++] = clickColor.g;
     clickColors[clickColorIterator++] = clickColor.b;
@@ -239,6 +244,7 @@ Points.prototype.createMesh = function() {
   // build the mesh
   this.mesh = new THREE.Points(geometry, this.getMaterial());
   this.mesh.frustumCulled = false;
+  this.setColors();
   world.scene.add(this.mesh);
 }
 
@@ -386,7 +392,6 @@ Points.prototype.getMaterial = function() {
         // get point shape
         float r = length(gl_PointCoord - vec2(0.5));
         if (r > 0.5) discard;
-
         if (useNightMode > 0.5) {
           gl_FragColor = vec4(vColor, 1.0);
         } else {
@@ -735,7 +740,7 @@ function Tooltip() {
 Tooltip.prototype.display = function(index) {
   clearTimeout(this.timeout);
   // bail if cell metadata isn't available
-  if (!points || !points.objects.length) return;
+  if (!points || !points.initialized) return;
   // bail if the user requested the item we're already showing
   if (index === this.displayed) return;
   this.displayed = index;
@@ -759,10 +764,12 @@ Tooltip.prototype.close = function() {
 }
 
 Tooltip.prototype.getTooltipHTML = function(index) {
-  return _.template(document.querySelector('#tooltip-template').innerHTML)({
-    index: index,
-    data: points.objects[index],
-  });
+  return points.objects && points.objects[index]
+    ? _.template(document.querySelector('#tooltip-template').innerHTML)({
+        index: index,
+        data: points.objects[index],
+      })
+    : null
 }
 
 Tooltip.prototype.addEventListeners = function() {
@@ -823,19 +830,22 @@ Preview.prototype.select = function() {
     }
     if (!keep) continue;
     // create the point object
-    var world = {x: points.positions[index][0], y: points.positions[index][1]};
+    var world = {
+      x: points.positions[index][0],
+      y: points.positions[index][1],
+    };
     var screen = worldToScreenCoords(world);
     var d = {
       x: screen.x,
       y: screen.y,
       index: index,
-      elem: this.getPreviewHTML(index),
     };
-    // ensure the elem exists
-    if (!d.elem) continue;
     // ensure elem doesn't overlap with others
     if (this.overlaps(d)) continue;
     // add the elem to the list to be rendered
+    d.elem = this.getPreviewHTML(index);
+    // ensure the elem exists
+    if (!d.elem) continue;
     d.elem.style.left = d.x + 'px';
     d.elem.style.top = d.y + 'px';
     this.selected.push(d);
@@ -878,9 +888,18 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getElementSize = function(d) {
+  // handle statically sized previews
+  if (state.previews.size) {
+    return {
+      width: state.previews.size,
+      height: state.previews.size,
+    }
+  }
+  // handle conditionally sized previews; first check cache
   if (d.index in this.sizes) {
     return this.sizes[d.index];
   }
+  // then process elements not in cache
   this.elems.offscreen.appendChild(d.elem);
   var box = d.elem.getBoundingClientRect();
   this.elems.offscreen.removeChild(d.elem);
@@ -892,7 +911,7 @@ Preview.prototype.getElementSize = function(d) {
 }
 
 Preview.prototype.getPreviewHTML = function(index) {
-  if (!points.objects) {
+  if (!points.initialized) {
     clearTimeout(this.timeout);
     this.timeout = setTimeout(this.getPreviewHTML.bind(this, index), 500);
     return;
@@ -905,6 +924,8 @@ Preview.prototype.getPreviewHTML = function(index) {
   });
   // convert to DOM Element
   var elem = htmlStringToDom(html);
+  elem.style.width = state.previews.size + 'px';
+  elem.style.height = state.previews.size + 'px';
   elem.id = 'preview-' + index;
   elem.onpointerdown = function(index, e) {
     // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
@@ -932,14 +953,9 @@ Preview.prototype.clear = function() {
 
 Preview.prototype.redraw = function() {
   clearTimeout(this.timeout);
-  if (points.objects.length > 0) {
+  if (points.initialized) {
     this.clear();
     this.select();
-  // run the initial draw once the data becomes available
-  } else {
-    this.timeout = setTimeout(function() {
-      this.redraw();
-    }.bind(this), 500)
   }
 }
 
