@@ -14,6 +14,7 @@ from umap import UMAP
 import numpy as np
 import mimetypes
 import argparse
+import shutil
 import glob2
 import uuid
 import json
@@ -22,7 +23,11 @@ import os
 '''
 TODO:
   Add --filter flag to remove objects without text/image properties
+  Add --template arg that selects from available templates
+  Add --vectors flag with one vector per object
   Set the vectorize argument to image if all inputs are images
+  Write config.json with kwargs for ui conditionalization
+  Conditionalize the default template selected
 '''
 
 config = {
@@ -31,10 +36,11 @@ config = {
   'limit': None,
   'sort': None,
   'metadata': None,
-  'n_neighbors': 4,
+  'n_neighbors': 5,
   'min_dist': 0.1,
-  'vectorize': 'text',
+  'vectorize': None,
   'output_folder': 'output',
+  'color_quality': 10,
   'plot_id': str(uuid.uuid1()),
 }
 
@@ -54,10 +60,12 @@ def parse():
 
 def validate_config(**kwargs):
   # check vectorization strategy
-  assert kwargs['vectorize'] in ['text', 'image']
+  assert kwargs.get('vectorize') in ['text', 'image', None]
   # check metadata
   metadata_mimetype = None if not kwargs['metadata'] else get_mimetype(kwargs['metadata'])
   if metadata_mimetype: assert metadata_mimetype in ['application/json', 'text/csv']
+  # check color_quality
+  assert isinstance(kwargs['color_quality'], int) and kwargs['color_quality'] >= 1
 
 def process(**kwargs):
   # create output directories
@@ -69,6 +77,9 @@ def process(**kwargs):
   # get a list of objects, one per datum to be represented
   print(' * collecting objects')
   kwargs['objects'] = get_objects(**kwargs)
+  # determine the vectorization type
+  print(' * determining field to vectorize')
+  kwargs['vectorize'] = get_vectorize(**kwargs)
   # get a list of vectors, one per datum to be represented
   print(' * collecting vectors')
   kwargs['vectors'] = get_vectors(**kwargs)
@@ -85,9 +96,9 @@ def process(**kwargs):
   print(' * done!')
 
 def create_directories(**kwargs):
-  for i in ['cache']:
-    if not os.path.exists(i):
-      os.makedirs(i)
+  Path(os.path.join('cache', 'image-vectors')).mkdir(parents=True, exist_ok=True)
+  Path(os.path.join('cache', 'image-colors')).mkdir(parents=True, exist_ok=True)
+  Path(os.path.join(kwargs['output_folder'], 'data')).mkdir(parents=True, exist_ok=True)
 
 ##
 # Get Metadata
@@ -185,6 +196,11 @@ class Image(dict):
 # Vectorize Objects
 ##
 
+def get_vectorize(**kwargs):
+  if kwargs.get('vectorize'): return kwargs['vectorize']
+  if all([isinstance(i, Image) for i in kwargs['objects']]): return 'image'
+  return 'text'
+
 def get_vectors(**kwargs):
   # TODO: create vector cache
   if kwargs['vectorize'] == 'image':
@@ -193,7 +209,7 @@ def get_vectors(**kwargs):
     vecs = []
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
-        cache_path = os.path.join('cache', i['path'].replace('/', '-'))
+        cache_path = os.path.join('cache', 'image-vectors', i['path'].replace('/', '-'))
         if os.path.exists(cache_path + '.npy'):
           vecs.append(np.load(cache_path + '.npy'))
           progress_bar.update(1)
@@ -206,7 +222,6 @@ def get_vectors(**kwargs):
           progress_bar.update(1)
           np.save(cache_path, vec)
         except Exception as exc:
-          print(exc)
           print('WARNING: Image', i, 'could not be vectorized')
     return vecs
   elif kwargs['vectorize'] == 'text':
@@ -242,27 +257,69 @@ def get_colors(**kwargs):
     return get_image_colors(**kwargs)
 
 def get_image_colors(**kwargs):
-  return np.array([ ColorThief(i['path']).get_color(quality=1) for i in kwargs['objects'] ])
+  colors = []
+  with tqdm(total=len(kwargs['objects'])) as progress_bar:
+    for i in kwargs['objects']:
+      cache_path = os.path.join('cache', 'image-colors', i['path'].replace('/', '-'))
+      if os.path.exists(cache_path + '.npy'):
+        color = np.load(cache_path + '.npy')
+      else:
+        color = ColorThief(i['path']).get_color(quality=kwargs.get('color_quality'))
+        np.save(cache_path + '.npy', color)
+      colors.append(color)
+      progress_bar.update(1)
+  return np.array(colors)
 
 ##
 # Write Outputs
 ##
 
 def write_outputs(**kwargs):
-  # make directories
-  Path(os.path.join(kwargs['output_folder'], 'data')).mkdir(parents=True, exist_ok=True)
   # copy web assets
   src = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'web')
   dest = os.path.join(os.getcwd(), kwargs['output_folder'])
   copy_tree(src, dest)
+  # copy media before mutating objects below
+  copy_media(**kwargs)
   # write data
+  kwargs['objects'] = format_objects(**kwargs)
   write_json(os.path.join(kwargs['output_folder'], 'data', 'positions.json'), kwargs['positions'].tolist())
   write_json(os.path.join(kwargs['output_folder'], 'data', 'colors.json'), kwargs['colors'].tolist())
   write_json(os.path.join(kwargs['output_folder'], 'data', 'objects.json'), kwargs['objects'])
 
+def format_objects(**kwargs):
+  # format user-provided objects for writing
+  if kwargs['vectorize'] == 'text':
+    return kwargs['objects']
+  elif kwargs['vectorize'] == 'image':
+    for i in kwargs['objects']:
+      i['path'] = os.path.basename(i['path'])
+      if not i['metadata']: del i['metadata']
+    return kwargs['objects']
+
 def write_json(path, obj):
   with open(path, 'w') as out:
     json.dump(obj, out)
+
+def copy_media(thumb_size=100, **kwargs):
+  if kwargs['vectorize'] == 'image':
+    print(' * copying media')
+    thumbs_dir = os.path.join(kwargs.get('output_folder'), 'data', 'thumbs')
+    originals_dir = os.path.join(kwargs.get('output_folder'), 'data', 'originals')
+    Path(thumbs_dir).mkdir(parents=True, exist_ok=True)
+    Path(originals_dir).mkdir(parents=True, exist_ok=True)
+    with tqdm(total=len(kwargs['objects'])) as progress_bar:
+      for i in kwargs['objects']:
+        name = os.path.basename(i['path'])
+        # process originals
+        shutil.copy(i['path'], os.path.join(originals_dir, name))
+        # process thumbs
+        im = i['image']
+        w, h = im.size
+        width = thumb_size
+        height = int(h * (thumb_size / w))
+        save_img(os.path.join(thumbs_dir, name), im.resize((width, height)))
+        progress_bar.update(1)
 
 if __name__ == '__main__':
   parse()
