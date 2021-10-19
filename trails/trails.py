@@ -53,16 +53,22 @@ def validate_config(**kwargs):
 
 def process(**kwargs):
   # get a metadata map, one k/v pair per datum to be represented
+  print(' * collecting metadata')
   kwargs['metadata'] = get_metadata(**kwargs)
   # get a list of objects, one per datum to be represented
+  print(' * collecting objects')
   kwargs['objects'] = get_objects(**kwargs)
   # get a list of vectors, one per datum to be represented
+  print(' * collecting vectors')
   kwargs['vectors'] = get_vectors(**kwargs)
   # project the vectors to 2D
+  print(' * collecting positions')
   kwargs['positions'] = get_positions(**kwargs)
   # project the vectors to 1D or extract image colors
+  print(' * collecting colors')
   kwargs['colors'] = get_colors(**kwargs)
   # write the outputs
+  print(' * writing outputs')
   write_outputs(**kwargs)
   # fin
   print(' * done!')
