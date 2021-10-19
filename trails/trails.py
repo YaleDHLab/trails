@@ -1,21 +1,28 @@
 from tensorflow.keras.preprocessing.image import save_img, img_to_array, array_to_img
 from tensorflow.keras.applications.inception_v3 import preprocess_input
 from sklearn.feature_extraction.text import TfidfVectorizer
+from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.applications import InceptionV3
 from sklearn.preprocessing import minmax_scale
 from sklearn.decomposition import NMF, PCA
+from tensorflow.keras.models import Model
 from distutils.dir_util import copy_tree
 from colorthief import ColorThief
 from pathlib import Path
+from tqdm import tqdm
 from umap import UMAP
+import numpy as np
 import mimetypes
 import argparse
 import glob2
+import uuid
 import json
 import os
 
 '''
-TODO: Add --filter flag to remove objects without text/image properties
+TODO:
+  Add --filter flag to remove objects without text/image properties
+  Set the vectorize argument to image if all inputs are images
 '''
 
 config = {
@@ -28,6 +35,7 @@ config = {
   'min_dist': 0.1,
   'vectorize': 'text',
   'output_folder': 'output',
+  'plot_id': str(uuid.uuid1()),
 }
 
 def parse():
@@ -35,7 +43,7 @@ def parse():
   description = 'Create the data required to create a Trails viewer'
   parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--inputs', '-i', type=str, default=config['inputs'], help='path to a glob of files to process', required=True)
-  parser.add_argument('--text', '-c', type=str, default=config['text'], help='field in metadata that contains body text (for text objects)', required=True)
+  parser.add_argument('--text', '-c', type=str, default=config['text'], help='field in metadata that contains body text (for text objects)', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
@@ -52,6 +60,9 @@ def validate_config(**kwargs):
   if metadata_mimetype: assert metadata_mimetype in ['application/json', 'text/csv']
 
 def process(**kwargs):
+  # create output directories
+  print(' * preparing directories')
+  create_directories(**kwargs)
   # get a metadata map, one k/v pair per datum to be represented
   print(' * collecting metadata')
   kwargs['metadata'] = get_metadata(**kwargs)
@@ -72,6 +83,11 @@ def process(**kwargs):
   write_outputs(**kwargs)
   # fin
   print(' * done!')
+
+def create_directories(**kwargs):
+  for i in ['cache']:
+    if not os.path.exists(i):
+      os.makedirs(i)
 
 ##
 # Get Metadata
@@ -114,9 +130,10 @@ def get_objects(**kwargs):
     x text/plain
   '''
   objects = []
+  unparsed = []
   for path in glob2.glob(kwargs['inputs']):
     mimetype = get_mimetype(path)
-    mimetype_base = mimetype.split('/')[-1] if mimetype else ''
+    mimetype_base = mimetype.split('/')[0] if mimetype else ''
     # JSON inputs
     if mimetype == 'application/json':
       for o in get_json_objects(path, **kwargs):
@@ -125,7 +142,11 @@ def get_objects(**kwargs):
     elif mimetype_base == 'image':
       objects.append(Image(path=path, metadata=kwargs['metadata'].get(path, {})))
     else:
-      print('WARNING: Only JSON and images are currently supported')
+      unparsed.append(path)
+  # warn user about unparsed objects
+  if unparsed:
+    print('WARNING: Only JSON and images are currently supported. The following were not processed:')
+    print(' '.join(unparsed))
   # optionally sort the objects
   if kwargs.get('sort'):
     default = '' if isinstance(kwargs['sort'], str) else 0
@@ -172,13 +193,21 @@ def get_vectors(**kwargs):
     vecs = []
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
+        cache_path = os.path.join('cache', i['path'].replace('/', '-'))
+        if os.path.exists(cache_path + '.npy'):
+          vecs.append(np.load(cache_path + '.npy'))
+          progress_bar.update(1)
+          continue
         try:
           # this next line uses the __missing__ handler to lazily load the image into RAM
           im = preprocess_input( img_to_array( i['image'].resize((299,299)) ) )
+          vec = model.predict(np.expand_dims(im, 0)).squeeze()
+          vecs.append(vec)
           progress_bar.update(1)
-          vecs.append(model.predict(np.expand_dims(im, 0)).squeeze())
-        except:
-          print('WARNING: Image', i, 'could not be processed')
+          np.save(cache_path, vec)
+        except Exception as exc:
+          print(exc)
+          print('WARNING: Image', i, 'could not be vectorized')
     return vecs
   elif kwargs['vectorize'] == 'text':
     text = [i.get(kwargs['text'], '') for i in kwargs['objects']]
@@ -213,7 +242,7 @@ def get_colors(**kwargs):
     return get_image_colors(**kwargs)
 
 def get_image_colors(**kwargs):
-  return np.array([ ColorThief(i['path']) for i in kwargs['objects'] ])
+  return np.array([ ColorThief(i['path']).get_color(quality=1) for i in kwargs['objects'] ])
 
 ##
 # Write Outputs
