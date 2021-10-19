@@ -3,8 +3,9 @@ from tensorflow.keras.applications.inception_v3 import preprocess_input
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tensorflow.keras.applications import InceptionV3
 from sklearn.preprocessing import minmax_scale
+from sklearn.decomposition import NMF, PCA
 from distutils.dir_util import copy_tree
-from sklearn.decomposition import NMF
+from colorthief import ColorThief
 from pathlib import Path
 from umap import UMAP
 import mimetypes
@@ -22,6 +23,7 @@ config = {
   'text': None,
   'limit': None,
   'sort': None,
+  'metadata': None,
   'n_neighbors': 4,
   'min_dist': 0.1,
   'vectorize': 'text',
@@ -37,14 +39,21 @@ def parse():
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
+  parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='metadata JSON for image inputs', required=False)
   config.update(vars(parser.parse_args()))
   validate_config(**config)
   process(**config)
 
 def validate_config(**kwargs):
+  # check vectorization strategy
   assert kwargs['vectorize'] in ['text', 'image']
+  # check metadata
+  metadata_mimetype = None if not kwargs['metadata'] else get_mimetype(kwargs['metadata'])
+  if metadata_mimetype: assert metadata_mimetype in ['application/json', 'text/csv']
 
 def process(**kwargs):
+  # get a metadata map, one k/v pair per datum to be represented
+  kwargs['metadata'] = get_metadata(**kwargs)
   # get a list of objects, one per datum to be represented
   kwargs['objects'] = get_objects(**kwargs)
   # get a list of vectors, one per datum to be represented
@@ -59,6 +68,30 @@ def process(**kwargs):
   print(' * done!')
 
 ##
+# Get Metadata
+##
+
+def get_metadata(**kwargs):
+  if not kwargs['metadata']: return {}
+  metadata = {}
+  mimetype = get_mimetype(kwargs['metadata'])
+  if mimetype == 'text/csv':
+    with open(kwargs['metadata']) as f:
+      reader = csv.reader(f)
+      headers = next(reader)
+      # the first row of CSVs must contain headers, and the first column must be filename
+      assert headers[0].lower() == 'filename'
+      for row in reader:
+        row = {headers[idx]: i for idx, i in enumerate(row)}
+        metadata[ row['filename'] ] = row
+  elif mimetype == 'application/json':
+    with open(kwargs['metadata']) as f:
+      for i in json.load(f):
+        assert 'filename' in i
+        metadata[ i['filename'] ] = i
+  return metadata
+
+##
 # Get Objects
 ##
 
@@ -66,28 +99,32 @@ def get_objects(**kwargs):
   '''
   Format inputs into a dictionary stream
 
-  Supported filetypes:
+  Supported mimetypes:
     * application/json
-    x image/jpeg
-    x image/gif
+    * image/jpeg
     x image/png
+    x image/gif
     x text/csv
     x text/plain
   '''
   objects = []
   for path in glob2.glob(kwargs['inputs']):
     mimetype = get_mimetype(path)
-    # handle the case of multi-object mimetypes (csv, json)
+    mimetype_base = mimetype.split('/')[-1] if mimetype else ''
+    # JSON inputs
     if mimetype == 'application/json':
       for o in get_json_objects(path, **kwargs):
         objects.append(o)
+    # image inputs
+    elif mimetype_base == 'image':
+      objects.append(Image(path=path, metadata=kwargs['metadata'].get(path, {})))
     else:
-      print('WARNING: Only JSON objects are currently supported')
+      print('WARNING: Only JSON and images are currently supported')
   # optionally sort the objects
   if kwargs.get('sort'):
     default = '' if isinstance(kwargs['sort'], str) else 0
     objects = sorted(objects, key=lambda i: i.get(kwargs['sort'], default), reverse=True)
-  # optionally limit the objects
+  # optionally limit the number of objects
   if kwargs.get('limit'):
     objects = objects[:kwargs['limit']]
   return objects
@@ -112,7 +149,7 @@ def get_mimetype(path, full=True):
 class Image(dict):
   '''
   A subclass of dict that permits lazy loading of images
-  Usage im = Image({'path': 'url_str'}); im['image'] = keras img
+  Usage im = Image(path='url_str'); im['image'] = keras img
   '''
   def __missing__(self, key):
     return load_img(self['path'])
@@ -129,10 +166,13 @@ def get_vectors(**kwargs):
     vecs = []
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
-        im = i['image']
-        im = preprocess_input( img_to_array( im.resize((299,299)) ) )
-        progress_bar.update(1)
-        vecs.append(model.predict(np.expand_dims(im, 0)).squeeze())
+        try:
+          # this next line uses the __missing__ handler to lazily load the image into RAM
+          im = preprocess_input( img_to_array( i['image'].resize((299,299)) ) )
+          progress_bar.update(1)
+          vecs.append(model.predict(np.expand_dims(im, 0)).squeeze())
+        except:
+          print('WARNING: Image', i, 'could not be processed')
     return vecs
   elif kwargs['vectorize'] == 'text':
     text = [i.get(kwargs['text'], '') for i in kwargs['objects']]
@@ -147,14 +187,27 @@ def get_vectors(**kwargs):
 def get_positions(**kwargs):
   return minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
 
-def get_colors(**kwargs):
-  return minmax_scale(run_umap(n_components=1, **kwargs))
-
 def run_umap(**kwargs):
+  vecs = PCA(n_components=50).fit_transform(kwargs['vectors'])
   return UMAP(n_neighbors=kwargs['n_neighbors'],
               min_dist=kwargs['min_dist'],
               n_components=kwargs['n_components'],
-              verbose=True).fit_transform(kwargs['vectors'])
+              verbose=True).fit_transform(vecs)
+
+##
+# Colors
+##
+
+def get_colors(**kwargs):
+  # for text data, return 1D umap
+  if kwargs['vectorize'] == 'text':
+    return minmax_scale(run_umap(n_components=1, **kwargs))
+  # for image data, return the dominant color for each image
+  elif kwargs['vectorize'] == 'image':
+    return get_image_colors(**kwargs)
+
+def get_image_colors(**kwargs):
+  return np.array([ ColorThief(i['path']) for i in kwargs['objects'] ])
 
 ##
 # Write Outputs
