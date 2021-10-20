@@ -23,7 +23,7 @@ import os
 '''
 TODO:
   Add --filter flag to remove objects without text/image properties
-  Add --template arg that selects from available templates
+  Add --template arg that selects from available templates (text, image, text+image)
   Add --vectors flag with one vector per object
   Set the vectorize argument to image if all inputs are images
   Write config.json with kwargs for ui conditionalization
@@ -142,18 +142,26 @@ def get_objects(**kwargs):
   '''
   objects = []
   unparsed = []
-  for path in glob2.glob(kwargs['inputs']):
-    mimetype = get_mimetype(path)
-    mimetype_base = mimetype.split('/')[0] if mimetype else ''
-    # JSON inputs
-    if mimetype == 'application/json':
-      for o in get_json_objects(path, **kwargs):
-        objects.append(o)
-    # image inputs
-    elif mimetype_base == 'image':
-      objects.append(Image(path=path, metadata=kwargs['metadata'].get(path, {})))
-    else:
-      unparsed.append(path)
+  paths = glob2.glob(kwargs['inputs'])
+  with tqdm(total=len(paths)) as progress_bar:
+    for path in paths:
+      mimetype = get_mimetype(path)
+      mimetype_base = mimetype.split('/')[0] if mimetype else ''
+      # JSON inputs
+      if mimetype == 'application/json':
+        for o in get_json_objects(path, **kwargs):
+          objects.append(o)
+      # image inputs
+      elif mimetype_base == 'image':
+        im = Image(path=path, metadata=kwargs['metadata'].get(path, {}))
+        try:
+          im['image'] # make sure images load
+          objects.append(im)
+        except:
+          pass
+      else:
+        unparsed.append(path)
+      progress_bar.update(1)
   # warn user about unparsed objects
   if unparsed:
     print('WARNING: Only JSON and images are currently supported. The following were not processed:')
