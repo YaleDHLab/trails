@@ -799,7 +799,7 @@ function Preview() {
   this.kdbush = null;
   this.hovered = null;
   this.n = state.previews.number;
-  this.margin = 10;
+  this.margin = 100;
   this.timeout = null;
   this.mouseTimeout = null;
   this.sizes = {}; // size cache, maps id to width & height

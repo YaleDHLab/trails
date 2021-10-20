@@ -79,7 +79,7 @@ a {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #ddd;
+  background-color: #f5f1ed;
   border-radius: 100%;
   animation-name: increase-scale;
   animation-duration: 0.6s;
@@ -117,7 +117,7 @@ a {
 }
 
 body.night-mode .preview {
-  border: 1px solid #afafaf;
+  border: 1px solid #f5f1ed;
   box-shadow: 0 0 .05rem rgba(255, 255, 255, 0.4),
               0 0 .05rem rgba(255, 255, 255, 0.4),
               0 0 0.5rem rgba(255, 255, 255, 0.4),
@@ -144,18 +144,21 @@ body.night-mode .preview.hovered {
 .preview-label {
   position: absolute;
   bottom: 0;
-  bottom: -23px;
+  bottom: -25px;
   padding: 2px 5px;
   font-size: 11px;
   font-family: 'Noto Sans Display', sans-serif;
   text-transform: uppercase;
   animation: swing-z 1.5s forwards;
   white-space: nowrap;
-  display: none;
   box-shadow: 0 0 5px #333;
-  background: #fff;
-  color: #000;
+  color: #362d23;
   pointer-events: none;
+}
+
+.preview-label,
+.tooltip {
+  background-color: #f5f1ed;
 }
 
 .preview.hovered .preview-label {
@@ -171,7 +174,7 @@ body.night-mode .preview.hovered {
     transform: translate(-50%, -50%) scale(1);
   }
   100% {
-    transform: translate(-50%, -50%) scale(0.4);
+    transform: translate(-50%, -50%) scale(0.5);
   }
 }
 
@@ -330,7 +333,7 @@ body.night-mode .tooltip-hover {
 
 .tooltip p {
   font-size: 0.775em;
-  color: #777;
+  color: #362d23;
   line-height: 1.25em;
 }
 
@@ -339,7 +342,7 @@ body.night-mode .tooltip-hover {
     background-color: #383838;
   }
   100% {
-    background-color: #fff;
+    background-color: #f5f1ed;
   }
 }
 
