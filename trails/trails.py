@@ -169,8 +169,9 @@ def get_objects(**kwargs):
       else:
         unparsed.append(path)
       progress_bar.update(1)
-    if kwargs.get('limit') and len(objects) >= kwargs['limit']:
-      break
+      # halt if we get enough
+      if kwargs.get('limit') and len(objects) >= kwargs['limit']:
+        break
   # throw an error if no objects are present
   if not objects:
     raise Exception('No inputs were found! Please check the value provided to --input')
