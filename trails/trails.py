@@ -8,6 +8,9 @@ from sklearn.decomposition import NMF, PCA
 from tensorflow.keras.models import Model
 from distutils.dir_util import copy_tree
 from colorthief import ColorThief
+from multiprocessing import Pool
+from functools import partial
+from gzip import GzipFile
 from pathlib import Path
 from tqdm import tqdm
 from umap import UMAP
@@ -18,6 +21,7 @@ import shutil
 import glob2
 import uuid
 import json
+import csv
 import os
 
 '''
@@ -28,6 +32,9 @@ TODO:
   Set the vectorize argument to image if all inputs are images
   Write config.json with kwargs for ui conditionalization
   Conditionalize the default template selected
+  Multiprocess image color extraction
+  Given just text files, create objects with filename attribute
+  Lazy load objects in DOM rather than loading all in objects.json
 '''
 
 config = {
@@ -81,7 +88,7 @@ def process(**kwargs):
   print(' * determining field to vectorize')
   kwargs['vectorize'] = get_vectorize(**kwargs)
   # get a list of vectors, one per datum to be represented
-  print(' * collecting vectors')
+  print(' * collecting vectors using {} data'.format(kwargs['vectorize']))
   kwargs['vectors'] = get_vectors(**kwargs)
   # project the vectors to 2D
   print(' * collecting positions')
@@ -135,7 +142,7 @@ def get_objects(**kwargs):
   Supported mimetypes:
     * application/json
     * image/jpeg
-    x image/png
+    * image/png
     x image/gif
     x text/csv
     x text/plain
@@ -151,17 +158,20 @@ def get_objects(**kwargs):
       if mimetype == 'application/json':
         for o in get_json_objects(path, **kwargs):
           objects.append(o)
+      # plaintext inputs
+      elif mimetype == 'text/plain':
+        o = get_plaintext_object(path, **kwargs)
+        objects.append(o)
       # image inputs
       elif mimetype_base == 'image':
-        im = Image(path=path, metadata=kwargs['metadata'].get(path, {}))
-        try:
-          im['image'] # make sure images load
-          objects.append(im)
-        except:
-          pass
+        o = get_image_object(path, **kwargs)
+        if o: objects.append(o)
       else:
         unparsed.append(path)
       progress_bar.update(1)
+  # throw an error if no objects are present
+  if not objects:
+    raise Exception('No inputs were found! Please check the value provided to --input')
   # warn user about unparsed objects
   if unparsed:
     print('WARNING: Only JSON and images are currently supported. The following were not processed:')
@@ -186,6 +196,20 @@ def get_json_objects(path, **kwargs):
     elif isinstance(j, dict):
       yield j
 
+def get_plaintext_object(path, **kwargs):
+  with open(path) as f:
+    return Plaintext(text=f.read(), metadata=dict(kwargs['metadata'].get(path, {}), **{
+      'filename': os.path.basename(path),
+    }))
+
+def get_image_object(path, **kwargs):
+  try:
+    im = Image(path=path, metadata=kwargs['metadata'].get(path, {}))
+    # make sure images load
+    return im if im['image'] else None
+  except:
+    pass
+
 def get_mimetype(path, full=True):
   '''Given a filepath, return the mimetype'''
   mime = mimetypes.MimeTypes().guess_type(path)[0]
@@ -200,6 +224,9 @@ class Image(dict):
   def __missing__(self, key):
     return load_img(self['path'])
 
+class Plaintext(dict):
+  pass
+
 ##
 # Vectorize Objects
 ##
@@ -210,7 +237,6 @@ def get_vectorize(**kwargs):
   return 'text'
 
 def get_vectors(**kwargs):
-  # TODO: create vector cache
   if kwargs['vectorize'] == 'image':
     base = InceptionV3(include_top=True, weights='imagenet',)
     model = Model(inputs=base.input, outputs=base.get_layer('avg_pool').output)
@@ -233,10 +259,10 @@ def get_vectors(**kwargs):
           print('WARNING: Image', i, 'could not be vectorized')
     return vecs
   elif kwargs['vectorize'] == 'text':
-    text = [i.get(kwargs['text'], '') for i in kwargs['objects']]
+    text = [i[kwargs['text'] if kwargs['text'] else 'text'] for i in kwargs['objects']]
     vectorizer = TfidfVectorizer()
     X = vectorizer.fit_transform(text)
-    return NMF(n_components=100, max_iter=100, verbose=1, init='nndsvd').fit_transform(X)
+    return NMF(n_components=100, max_iter=50, verbose=1, init='nndsvd').fit_transform(X)
 
 ##
 # UMAP
@@ -262,21 +288,30 @@ def get_colors(**kwargs):
     return minmax_scale(run_umap(n_components=1, **kwargs))
   # for image data, return the dominant color for each image
   elif kwargs['vectorize'] == 'image':
-    return get_image_colors(**kwargs)
+    return get_all_image_colors(**kwargs)
 
-def get_image_colors(**kwargs):
-  colors = []
+def get_all_image_colors(**kwargs):
+  colors = [None for _ in kwargs['objects']]
   with tqdm(total=len(kwargs['objects'])) as progress_bar:
-    for i in kwargs['objects']:
-      cache_path = os.path.join('cache', 'image-colors', i['path'].replace('/', '-'))
-      if os.path.exists(cache_path + '.npy'):
-        color = np.load(cache_path + '.npy')
-      else:
-        color = ColorThief(i['path']).get_color(quality=kwargs.get('color_quality'))
-        np.save(cache_path + '.npy', color)
-      colors.append(color)
+    pool = Pool()
+    l = [[idx, i, kwargs['color_quality']] for idx, i in enumerate(kwargs['objects'])]
+    for i in pool.imap(get_image_colors, l):
+      idx, color = i
+      colors[idx] = color
       progress_bar.update(1)
+    pool.close()
+    pool.join()
   return np.array(colors)
+
+def get_image_colors(args):
+  idx, obj, quality = args
+  cache_path = os.path.join('cache', 'image-colors', obj['path'].replace('/', '-'))
+  if os.path.exists(cache_path + '.npy'):
+    color = np.load(cache_path + '.npy')
+  else:
+    color = ColorThief(obj['path']).get_color(quality=quality)
+    np.save(cache_path + '.npy', color)
+  return [idx, color]
 
 ##
 # Write Outputs
@@ -291,9 +326,12 @@ def write_outputs(**kwargs):
   copy_media(**kwargs)
   # write data
   kwargs['objects'] = format_objects(**kwargs)
-  write_json(os.path.join(kwargs['output_folder'], 'data', 'positions.json'), kwargs['positions'].tolist())
-  write_json(os.path.join(kwargs['output_folder'], 'data', 'colors.json'), kwargs['colors'].tolist())
-  write_json(os.path.join(kwargs['output_folder'], 'data', 'objects.json'), kwargs['objects'])
+  positions_path = os.path.join(kwargs['output_folder'], 'data', 'positions.json')
+  colors_path = os.path.join(kwargs['output_folder'], 'data', 'colors.json')
+  objects_path = os.path.join(kwargs['output_folder'], 'data', 'objects.json')
+  write_json(positions_path, round_floats(kwargs['positions'].tolist()), gzip=True)
+  write_json(colors_path, kwargs['colors'].squeeze().tolist(), gzip=True)
+  write_json(objects_path, kwargs['objects'], gzip=True)
 
 def format_objects(**kwargs):
   # format user-provided objects for writing
@@ -305,9 +343,18 @@ def format_objects(**kwargs):
       if not i['metadata']: del i['metadata']
     return kwargs['objects']
 
-def write_json(path, obj):
-  with open(path, 'w') as out:
-    json.dump(obj, out)
+def round_floats(obj, digits=4):
+  '''Return 2D array obj with rounded float precision'''
+  return [[round(float(j), digits) for j in i] for i in obj]
+
+def write_json(path, obj, gzip=False):
+  if gzip:
+    if not path.endswith('.gz'): path += '.gz'
+    with GzipFile(path, 'w') as out:
+      out.write(json.dumps(obj).encode('utf-8'))
+  else:
+    with open(path, 'w') as out:
+      json.dump(obj, out)
 
 def copy_media(thumb_size=100, **kwargs):
   if kwargs['vectorize'] == 'image':

@@ -14,7 +14,7 @@ var dpi = window.devicePixelRatio || 1;
 function State() {
   this.points = {
     size: 1.0,
-    colors: 'default',
+    colors: 'blues',
     glow: false,
   };
   this.previews = {
@@ -143,24 +143,15 @@ Points.prototype.init = function() {
   this.colors = [];
   this.n = null;
   this.max = 150000;
-  Promise.all([
-    fetch('data/objects.json'),
-    fetch('data/positions.json'),
-    fetch('data/colors.json'),
-  ]).then(results => {
-    const [objects, positions, colors] = results;
-    this.handleDataJson('objects', objects);
-    this.handleDataJson('positions', positions);
-    this.handleDataJson('colors', colors);
-  })
+  get('data/objects.json.gz', this.handleDataJson.bind(this, 'objects'))
+  get('data/positions.json.gz', this.handleDataJson.bind(this, 'positions'))
+  get('data/colors.json.gz', this.handleDataJson.bind(this, 'colors'))
 }
 
-Points.prototype.handleDataJson = function(attr, response) {
-  if (response.status === 200) response.json().then(json => {
-    this[attr] = json.slice(0, this.max);
-    this.n = this[attr].length;
-    this.initialize();
-  })
+Points.prototype.handleDataJson = function(attr, json) {
+  this[attr] = json.slice(0, this.max);
+  this.n = this[attr].length;
+  this.initialize();
 }
 
 Points.prototype.setColors = function() {
@@ -579,13 +570,13 @@ TouchTexture.prototype.update = function(delta) {
   if (this.frozen) return;
   this.clear();
   // age points
-  this.trail.forEach((point, i) => {
+  this.trail.forEach(function(point, i) {
     point.age++;
     // remove old
     if (point.age > this.maxAge) {
       this.trail.splice(i, 1);
     }
-  });
+  }.bind(this));
   this.trail.forEach(this.drawPoint.bind(this));
   this.drawCursor();
   this.texture.needsUpdate = true;
@@ -625,7 +616,7 @@ TouchTexture.prototype.drawPoint = function(point) {
     intensity = easeOutSine(1 - (point.age - this.maxAge * 0.3) / (this.maxAge * 0.7), 0, 1, 1);
   }
   intensity *= point.force;
-  var radius = this.size * this.radius * intensity;
+  var radius = Math.max(this.size * this.radius * intensity, 0);
   var gradient = this.ctx.createRadialGradient(pos.x, pos.y, radius * 0.25, pos.x, pos.y, radius);
   gradient.addColorStop(0, `rgba(255, 255, 255, 0.2)`);
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
@@ -819,7 +810,9 @@ Preview.prototype.createIndex = function(positions) {
 // select the set of this.n previews to show
 Preview.prototype.select = function() {
   var bounds = getWorldBounds();
-  var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort((a, b) => a-b);
+  var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort(function(a, b) {
+    return a-b;
+  });
   for (var i=0; i<indices.length; i++) {
     var index = indices[i];
     // don't stop 'til you get enough
@@ -973,34 +966,35 @@ Preview.prototype.setHovered = function(id) {
   // prevent consecutive hovering selections
   clearTimeout(this.mouseTimeout);
   // bail if we're being asked to show the cell we're already showing
-  if (id === this.hovered) return;
-  // clear the old hovered state
-  var previous = document.querySelector('#preview-' + this.hovered);
-  if (previous) previous.classList.remove('hovered');
-  // set the hovered id
-  this.hovered = id;
-  // if the id is -1 clear the hovered cell
-  if (id === -1) {
-    this.elems.hovered.innerHTML = '';
-  // if this point is already previewed, update the element
-  } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
-    // set mouse offscreen to prevent touchtexture focus on point border
-    mouse.set({x: -1000, y: -1000});
-    document.querySelector('#preview-' + id).classList.add('hovered');
-    this.elems.hovered.innerHTML = '';
-  // if the point is not already previewed, create it
-  } else {
-    // otherwise show this cell
-    var elem = this.getPreviewHTML(id, 'hovered');
-    if (!elem) return this.adjustStates();
-    elem.classList.add('hovered');
-    elem.style.left = mouse.x + 'px';
-    elem.style.top = mouse.y + 'px';
-    this.elems.hovered.innerHTML = '';
-    this.elems.hovered.appendChild(elem);
+  if (id !== this.hovered) {
+    // clear the old hovered state
+    var previous = document.querySelector('#preview-' + this.hovered);
+    if (previous) previous.classList.remove('hovered');
+    // set the hovered id
+    this.hovered = id;
+    // if the id is -1 clear the hovered cell
+    if (id === -1) {
+      this.elems.hovered.innerHTML = '';
+    // if this point is already previewed, update the element
+    } else if (this.selected.map(function(i) {return i.index}).indexOf(id) > -1) {
+      // set mouse offscreen to prevent touchtexture focus on point border
+      mouse.set({x: -1000, y: -1000});
+      document.querySelector('#preview-' + id).classList.add('hovered');
+      this.elems.hovered.innerHTML = '';
+    // if the point is not already previewed, create it
+    } else {
+      // otherwise show this cell
+      var elem = this.getPreviewHTML(id, 'hovered');
+      if (!elem) return this.adjustStates();
+      elem.classList.add('hovered');
+      elem.style.left = mouse.x + 'px';
+      elem.style.top = mouse.y + 'px';
+      this.elems.hovered.innerHTML = '';
+      this.elems.hovered.appendChild(elem);
+    }
+    // shrink cells close to the mouse
+    this.adjustStates();
   }
-  // shrink cells close to the mouse
-  this.adjustStates();
 }
 
 // adjust the size of previews near the hovered elem
@@ -1673,6 +1667,48 @@ function htmlStringToDom(s) {
   var wrapper = document.createElement('div');
   wrapper.innerHTML = s;
   return wrapper.firstChild.nextSibling;
+}
+
+function get(url, onSuccess, onErr) {
+  onSuccess = onSuccess || function() {};
+  onErr = onErr || function() {};
+  var xhr = new XMLHttpRequest();
+  xhr.overrideMimeType('text\/plain; charset=x-user-defined');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState == XMLHttpRequest.DONE) {
+      if (xhr.status === 200) {
+        var data = xhr.responseText;
+        // unzip the data if necessary
+        if (url.substring(url.length-3) == '.gz') {
+          data = gunzip(data);
+          url = url.substring(0, url.length-3);
+        }
+        // determine if data can be JSON parsed
+        url.substring(url.length-5) == '.json'
+          ? onSuccess(JSON.parse(data))
+          : onSuccess(data);
+      } else {
+        onErr(xhr)
+      }
+    };
+  };
+  xhr.open('GET', url, true);
+  xhr.send();
+};
+
+function gunzip(data) {
+  var bytes = [];
+  for (var i=0; i<data.length; i++) {
+    bytes.push(data.charCodeAt(i) & 0xff);
+  }
+  var gunzip = new Zlib.Gunzip(bytes);
+  var plain = gunzip.decompress();
+  // Create ascii string from byte sequence
+  var asciistring = '';
+  for (var i=0; i<plain.length; i++) {
+    asciistring += String.fromCharCode(plain[i]);
+  }
+  return asciistring;
 }
 
 /**

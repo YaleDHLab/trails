@@ -143,8 +143,7 @@ body.night-mode .preview.hovered {
 
 .preview-label {
   position: absolute;
-  bottom: 0;
-  bottom: -25px;
+  bottom: -27px;
   padding: 2px 5px;
   font-size: 11px;
   font-family: 'Noto Sans Display', sans-serif;
