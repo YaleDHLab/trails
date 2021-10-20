@@ -140,12 +140,12 @@ def get_objects(**kwargs):
   Format inputs into a dictionary stream
 
   Supported mimetypes:
+    * text/plain
     * application/json
     * image/jpeg
     * image/png
     x image/gif
     x text/csv
-    x text/plain
   '''
   objects = []
   unparsed = []
@@ -169,6 +169,8 @@ def get_objects(**kwargs):
       else:
         unparsed.append(path)
       progress_bar.update(1)
+    if kwargs.get('limit') and len(objects) >= kwargs['limit']:
+      break
   # throw an error if no objects are present
   if not objects:
     raise Exception('No inputs were found! Please check the value provided to --input')
@@ -204,7 +206,7 @@ def get_plaintext_object(path, **kwargs):
 
 def get_image_object(path, **kwargs):
   try:
-    im = Image(path=path, metadata=kwargs['metadata'].get(path, {}))
+    im = Image(path=path, metadata=kwargs['metadata'].get(os.path.basename(path), {}))
     # make sure images load
     return im if im['image'] else None
   except:
