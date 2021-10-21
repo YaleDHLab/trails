@@ -26,7 +26,7 @@ function State() {
     threshold: 0.21,
     strength: 1.2,
     radius: 0.55,
-  }
+  };
 };
 
 /**
@@ -192,7 +192,7 @@ Points.prototype.setAttribute = function(name, arr) {
 }
 
 Points.prototype.initialize = function() {
-  if (this.positions.length && this.objects.length && this.colors.length) {
+  if (this.positions.length && this.colors.length) {
     this.createMesh();
     // initialize downstream layers that depend on this mesh
     picker.init();
@@ -818,14 +818,16 @@ Preview.prototype.select = function() {
     // don't stop 'til you get enough
     if (this.selected.length === this.n) break;
     // ensure the current point has all required attributes
-    var keep = true;
+    /*
+    var keep = false;
     for (var j=0; j<this.requiredAttributes.length; j++) {
-      if (!(points.objects[index][this.requiredAttributes[j]])) {
-        keep = false;
+      if (points.objects[index][this.requiredAttributes[j]]) {
+        keep = true;
         break;
       }
     }
     if (!keep) continue;
+    */
     // create the point object
     var world = {
       x: points.positions[index][0],
@@ -908,23 +910,18 @@ Preview.prototype.getElementSize = function(d) {
 }
 
 Preview.prototype.getPreviewHTML = function(index) {
-  if (!points.initialized) {
-    clearTimeout(this.timeout);
-    this.timeout = setTimeout(this.getPreviewHTML.bind(this, index), 500);
-    return;
-  }
-  var meta = (points.objects || [])[index];
+  if (!points.initialized) return;
   // get html string
+  var data = points.objects[index] || {};
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
-    data: points.objects[index],
-    position: points.positions[index],
-    color: points.colors[index],
+    label: data.label,
+    image: data.filename,
+    size: state.previews.size + 'px',
+    data: data,
   });
   // convert to DOM Element
   var elem = htmlStringToDom(html);
-  elem.style.width = state.previews.size + 'px';
-  elem.style.height = state.previews.size + 'px';
   elem.id = 'preview-' + index;
   elem.onpointerup = function(index, e) {
     // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
@@ -1197,8 +1194,8 @@ Lasso.prototype.draw = function() {
 
 Lasso.prototype.highlightSelected = function() {
   // create the attribute for the selected cells
-  var attr = new Float32Array(points.objects.length);
-  for (var i=0; i<points.objects.length; i++) {
+  var attr = new Float32Array(points.n);
+  for (var i=0; i<points.n; i++) {
     attr[i] = this.selected[i] ? 1.0 : 0.0;
   }
   points.setAttribute('selected', attr);

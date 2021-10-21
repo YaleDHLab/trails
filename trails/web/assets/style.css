@@ -56,6 +56,18 @@ a {
  * Textures
  **/
 
+.particle-texture::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(images/particle-texture.jpg);
+  opacity: 0.2;
+  background-size: 140px;
+}
+
 .paper-texture::after {
   content: '';
   position: absolute;
@@ -66,6 +78,23 @@ a {
   background-image: url(images/paper.png);
   opacity: 0.5;
   background-size: 100px;
+}
+
+.glow::before {
+  border: 1px solid #f5f1ed;
+  box-shadow: 0 0 0.05rem rgb(255 255 255 / 40%),
+              0 0 0.05rem rgb(255 255 255 / 40%),
+              0 0 0.5rem rgb(255 255 255 / 40%),
+              0 0 0.2rem rgb(255 255 255 / 40%),
+              0 0 0.7rem rgb(255 255 255 / 40%),
+        inset 0 0 0.325rem rgb(255 255 255 / 40%);
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
 }
 
 /**
@@ -79,26 +108,11 @@ a {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #f5f1ed;
-  border-radius: 100%;
   animation-name: increase-scale;
   animation-duration: 0.6s;
   animation-fill-mode: forwards;
   animation-timing-function: cubic-bezier(.22,1.16,.69,1.28);
   transform: scale(0.01);
-}
-
-.preview::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background-image: url(images/particle-texture.jpg);
-  opacity: 0.2;
-  border-radius: 100%;
-  background-size: 140px;
 }
 
 .preview.paper-texture::after {
@@ -107,7 +121,7 @@ a {
 
 .preview.hovered {
   z-index: 11;
-  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
+  animation: increase-scale 0.3s forwards;
   animation-delay: 0s !important;
 }
 
@@ -116,18 +130,8 @@ a {
   animation-delay: 0s !important;
 }
 
-body.night-mode .preview {
-  border: 1px solid #f5f1ed;
-  box-shadow: 0 0 .05rem rgba(255, 255, 255, 0.4),
-              0 0 .05rem rgba(255, 255, 255, 0.4),
-              0 0 0.5rem rgba(255, 255, 255, 0.4),
-              0 0 0.2rem rgba(255, 255, 255, 0.4),
-              0 0 0.7rem rgba(255, 255, 255, 0.4),
-              inset 0 0 0.325rem rgba(255, 255, 255, 0.4);
-}
-
 body.night-mode .preview.hovered {
-  animation: increase-scale 0.3s forwards, pulse-light 2s infinite;
+  animation: increase-scale 0.3s forwards;
 }
 
 .preview-image {
@@ -137,13 +141,27 @@ body.night-mode .preview.hovered {
   border-radius: 100%;
   opacity: 1;
   overflow: hidden;
-  height: 100%;
-  width: 100%;
+}
+
+.preview.hovered .preview-image {
+  animation: pulse-dark 2s infinite;
+}
+
+body.night-mode .preview.hovered .preview-image {
+  animation: pulse-light 2s infinite;
+}
+
+.preview-image.paper-texture::after {
+  border-radius: 100%;
+}
+
+.preview-label,
+.tooltip {
+  background-color: #f5f1ed;
 }
 
 .preview-label {
   position: absolute;
-  bottom: -27px;
   padding: 2px 5px;
   font-size: 11px;
   font-family: 'Noto Sans Display', sans-serif;
@@ -152,12 +170,10 @@ body.night-mode .preview.hovered {
   white-space: nowrap;
   box-shadow: 0 0 5px #333;
   color: #362d23;
-  pointer-events: none;
 }
 
-.preview-label,
-.tooltip {
-  background-color: #f5f1ed;
+.preview.has-image .preview-label {
+  bottom: -27px;
 }
 
 .preview.hovered .preview-label {

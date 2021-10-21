@@ -22,8 +22,20 @@
 
       <!-- PREVIEW_TEMPLATE -->
       <script type='x-html/x-template' id='preview-template'>
-        <div class='preview paper-texture' style='animation-delay: <%- Math.random() + "s" %>'>
-          <div class='preview-image' style='background-image: url("data/thumbs/<%- data.path %>")'></div>
+        <% var previewClass = 'preview ' %>
+        <% if (image) previewClass += 'has-image ' %>
+        <% if (label) previewClass += 'has-label ' %>
+
+        <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
+          <% if (image) { %>
+            <div class='preview-image paper-texture glow'
+              style='background-image: url("data/thumbs/<%- decodeURIComponent(image) %>");
+                     height: <%- size %>;
+                     width:  <%- size %>;'></div>
+          <% } %>
+          <% if (label) { %>
+            <div class='preview-label paper-texture glow'><%= label %></div>
+          <% } %>
         </div>
       </script>
 
