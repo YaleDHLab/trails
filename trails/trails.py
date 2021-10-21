@@ -9,6 +9,7 @@ from tensorflow.keras.models import Model
 from distutils.dir_util import copy_tree
 from colorthief import ColorThief
 from multiprocessing import Pool
+from urllib.parse import unquote
 from functools import partial
 from gzip import GzipFile
 from pathlib import Path
@@ -40,6 +41,7 @@ TODO:
 config = {
   'inputs': None,
   'text': None,
+  'label': None,
   'limit': None,
   'sort': None,
   'metadata': None,
@@ -48,6 +50,7 @@ config = {
   'vectorize': None,
   'output_folder': 'output',
   'color_quality': 10,
+  'max_iter': 50,
   'plot_id': str(uuid.uuid1()),
 }
 
@@ -56,9 +59,11 @@ def parse():
   description = 'Create the data required to create a Trails viewer'
   parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--inputs', '-i', type=str, default=config['inputs'], help='path to a glob of files to process', required=True)
-  parser.add_argument('--text', '-c', type=str, default=config['text'], help='field in metadata that contains body text (for text objects)', required=False)
+  parser.add_argument('--text', type=str, default=config['text'], help='attribute or field that contains body text', required=False)
+  parser.add_argument('--label', type=str, default=config['text'], help='attribute or field that contains label text', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
+  parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
   parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='metadata JSON for image inputs', required=False)
   config.update(vars(parser.parse_args()))
@@ -123,13 +128,30 @@ def get_metadata(**kwargs):
       assert headers[0].lower() == 'filename'
       for row in reader:
         row = {headers[idx]: i for idx, i in enumerate(row)}
-        metadata[ row['filename'] ] = row
+        row = standardize_metadata_row(row, **kwargs)
+        metadata[ format_filename(row['filename']) ] = row
   elif mimetype == 'application/json':
     with open(kwargs['metadata']) as f:
       for i in json.load(f):
         assert 'filename' in i
-        metadata[ i['filename'] ] = i
+        metadata[ format_filename(i['filename']) ] = standardize_metadata_row(i, **kwargs)
   return metadata
+
+def standardize_metadata_row(d, **kwargs):
+  standardized = {}
+  for k, v in d.items():
+    # the primary key must always be added, even if it's used for text or label
+    if k == 'filename':
+      v = format_filename(v)
+      standardized[k] = v
+    for w in ['label', 'text']:
+      if k == kwargs.get(w):
+        k = w
+    standardized[k] = v
+  return standardized
+
+def format_filename(s):
+  return '_'.join(unquote(s).split()).replace('/', '_').replace('\\', '_')
 
 ##
 # Get Objects
@@ -157,7 +179,7 @@ def get_objects(**kwargs):
       # JSON inputs
       if mimetype == 'application/json':
         for o in get_json_objects(path, **kwargs):
-          objects.append(o)
+          objects.append(standardize_metadata_row(o, **kwargs))
       # plaintext inputs
       elif mimetype == 'text/plain':
         o = get_plaintext_object(path, **kwargs)
@@ -200,18 +222,17 @@ def get_json_objects(path, **kwargs):
       yield j
 
 def get_plaintext_object(path, **kwargs):
+  bn = os.path.basename(path)
+  meta = kwargs['metadata'].get(format_filename(bn), {})
   with open(path) as f:
-    return Plaintext(text=f.read(), metadata=dict(kwargs['metadata'].get(path, {}), **{
-      'filename': os.path.basename(path),
-    }))
+    return {**Plaintext(text=f.read(), label=bn), **meta} # meta gets precedence
 
 def get_image_object(path, **kwargs):
-  try:
-    im = Image(path=path, metadata=kwargs['metadata'].get(os.path.basename(path), {}))
-    # make sure images load
-    return im if im['image'] else None
-  except:
-    pass
+  bn = os.path.basename(path)
+  meta = kwargs['metadata'].get(format_filename(bn), {})
+  im = Image({**{'path': path, 'label': bn, 'filename': bn}, **meta}) # meta gets precedence
+  # make sure images load
+  return im if im['image'] else None
 
 def get_mimetype(path, full=True):
   '''Given a filepath, return the mimetype'''
@@ -262,10 +283,10 @@ def get_vectors(**kwargs):
           print('WARNING: Image', i, 'could not be vectorized')
     return vecs
   elif kwargs['vectorize'] == 'text':
-    text = [i[kwargs['text'] if kwargs['text'] else 'text'] for i in kwargs['objects']]
+    text = [i['text'] for i in kwargs['objects']]
     vectorizer = TfidfVectorizer()
     X = vectorizer.fit_transform(text)
-    return NMF(n_components=100, max_iter=50, verbose=1, init='nndsvd').fit_transform(X)
+    return NMF(n_components=min(len(text), 100), max_iter=kwargs['max_iter'], verbose=1, init='nndsvd').fit_transform(X)
 
 ##
 # UMAP
@@ -275,7 +296,7 @@ def get_positions(**kwargs):
   return minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
 
 def run_umap(**kwargs):
-  vecs = PCA(n_components=50).fit_transform(kwargs['vectors'])
+  vecs = PCA(n_components=min(len(kwargs['vectors']), 50)).fit_transform(kwargs['vectors'])
   return UMAP(n_neighbors=kwargs['n_neighbors'],
               min_dist=kwargs['min_dist'],
               n_components=kwargs['n_components'],
@@ -327,28 +348,21 @@ def write_outputs(**kwargs):
   copy_tree(src, dest)
   # copy media before mutating objects below
   copy_media(**kwargs)
-  # write data
-  kwargs['objects'] = format_objects(**kwargs)
+  # merge metadata into object
+  kwargs['objects'] = [ {**i, **i.get('metadata', {})} for i in kwargs['objects'] ]
+  # write outputs
   positions_path = os.path.join(kwargs['output_folder'], 'data', 'positions.json')
   colors_path = os.path.join(kwargs['output_folder'], 'data', 'colors.json')
   objects_path = os.path.join(kwargs['output_folder'], 'data', 'objects.json')
-  write_json(positions_path, round_floats(kwargs['positions'].tolist()), gzip=True)
-  write_json(colors_path, kwargs['colors'].squeeze().tolist(), gzip=True)
+  write_json(positions_path, round_floats(kwargs['positions']), gzip=True)
+  write_json(colors_path, round_floats(kwargs['colors'].squeeze(), digits=2), gzip=True)
   write_json(objects_path, kwargs['objects'], gzip=True)
 
-def format_objects(**kwargs):
-  # format user-provided objects for writing
-  if kwargs['vectorize'] == 'text':
-    return kwargs['objects']
-  elif kwargs['vectorize'] == 'image':
-    for i in kwargs['objects']:
-      i['path'] = os.path.basename(i['path'])
-      if not i['metadata']: del i['metadata']
-    return kwargs['objects']
-
-def round_floats(obj, digits=4):
-  '''Return 2D array obj with rounded float precision'''
-  return [[round(float(j), digits) for j in i] for i in obj]
+def round_floats(a, digits=3):
+  '''Return 1D or 2D array a with rounded float precision'''
+  if len(a.shape) == 2: return [[round(float(j), digits) for j in i] for i in a]
+  elif len(a.shape) == 1: return [round(float(j), digits) for j in a]
+  return a
 
 def write_json(path, obj, gzip=False):
   if gzip:
@@ -368,7 +382,7 @@ def copy_media(thumb_size=100, **kwargs):
     Path(originals_dir).mkdir(parents=True, exist_ok=True)
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
-        name = os.path.basename(i['path'])
+        name = format_filename(os.path.basename(i['path']))
         # process originals
         shutil.copy(i['path'], os.path.join(originals_dir, name))
         # process thumbs
