@@ -17,18 +17,6 @@ wget https://lab-data-collections.s3.amazonaws.com/wiki-people.json
 trails --input "wiki-people.json" --text "abstract" --label "name"
 ```
 
-# Input Data
-
-```
-trails -i "datasets/text/philosophical_transactions/texts/*" --limit 50
-
-trails -i "datasets/image/oslo/images/oslophotos/*" --limit 50
-
-trails -i "datasets/text/urban_dictionary/dataset.json" --limit 200 --text "def" --label "word"
-
-trails -i "datasets/image/oslo/images/oslophotos/*" -m "datasets/image/oslo/metadata/metadata.csv" --text "description" --label "filename" --limit 50
-```
-
 # Customizing UI
 
 TODO
