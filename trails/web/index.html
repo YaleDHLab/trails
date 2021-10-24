@@ -25,6 +25,7 @@
         <% var previewClass = 'preview ' %>
         <% if (image) previewClass += 'has-image ' %>
         <% if (label) previewClass += 'has-label ' %>
+        <% getLocalPath = function(value) { return value.split(/[\\/]/).pop(); } %>
 
         <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
           <% if (image) { %>
@@ -42,7 +43,7 @@
       <!-- TOOLTIP_TEMPLATE -->
       <script type='x-html/x-template' id='tooltip-template'>
         <div class="tooltip row align-center paper-texture">
-          <div class="tooltip-image" style='background-image:url("data/thumbs/<%- data.path %>")'></div>
+          <div class="tooltip-image" style='background-image:url("data/thumbs/<%- getLocalPath(data.path) %>")'></div>
           <div class="col ">
             <div class="row space-between">
               <div class="col">
