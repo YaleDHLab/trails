@@ -153,8 +153,8 @@ def standardize_metadata_row(d, **kwargs):
 def format_filename(s):
   return '_'.join(
       unquote(s).split()
-    )
-    .replace('/', '_')
+    ) \
+    .replace('/', '_') \
     .replace('\\', '_')
 
 ##
@@ -229,12 +229,16 @@ def get_plaintext_object(path, **kwargs):
   bn = os.path.basename(path)
   meta = kwargs['metadata'].get(format_filename(bn), {})
   with open(path) as f:
-    return {**Plaintext(text=f.read(), label=bn), **meta} # meta gets precedence
+    text = Plaintext(text=f.read(), label=bn)
+    text.update(meta)
+    return text
 
 def get_image_object(path, **kwargs):
   bn = os.path.basename(path)
-  meta = kwargs['metadata'].get(format_filename(bn), {})
-  im = Image({**{'path': path, 'label': bn, 'filename': bn}, **meta}) # meta gets precedence
+  formatted_bn = format_filename(bn)
+  meta = kwargs['metadata'].get(formatted_bn, {})
+  im = Image(path=path, label=formatted_bn, filename=formatted_bn)
+  im.update(meta)
   # make sure images load
   return im if im['image'] else None
 

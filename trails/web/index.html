@@ -30,7 +30,7 @@
         <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
           <% if (image) { %>
             <div class='preview-image paper-texture glow'
-              style='background-image: url("data/thumbs/<%- decodeURIComponent(image) %>");
+              style='background-image: url("data/thumbs/<%- getLocalPath(image) %>");
                      height: <%- size %>;
                      width:  <%- size %>;'></div>
           <% } %>
@@ -43,7 +43,7 @@
       <!-- TOOLTIP_TEMPLATE -->
       <script type='x-html/x-template' id='tooltip-template'>
         <div class="tooltip row align-center paper-texture">
-          <div class="tooltip-image" style='background-image:url("data/thumbs/<%- getLocalPath(data.path) %>")'></div>
+          <div class="tooltip-image" style='background-image:url("data/originals/<%- getLocalPath(data.path) %>")'></div>
           <div class="col ">
             <div class="row space-between">
               <div class="col">
