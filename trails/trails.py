@@ -151,7 +151,11 @@ def standardize_metadata_row(d, **kwargs):
   return standardized
 
 def format_filename(s):
-  return '_'.join(unquote(s).split()).replace('/', '_').replace('\\', '_')
+  return '_'.join(
+      unquote(s).split()
+    )
+    .replace('/', '_')
+    .replace('\\', '_')
 
 ##
 # Get Objects
@@ -356,7 +360,7 @@ def write_outputs(**kwargs):
   objects_path = os.path.join(kwargs['output_folder'], 'data', 'objects.json')
   write_json(positions_path, round_floats(kwargs['positions']), gzip=True)
   write_json(colors_path, round_floats(kwargs['colors'].squeeze(), digits=2), gzip=True)
-  write_json(objects_path, kwargs['objects'], gzip=True)
+  write_objects(**kwargs)
 
 def round_floats(a, digits=3):
   '''Return 1D or 2D array a with rounded float precision'''
@@ -372,6 +376,13 @@ def write_json(path, obj, gzip=False):
   else:
     with open(path, 'w') as out:
       json.dump(obj, out)
+
+def write_objects(**kwargs):
+  objects_dir = os.path.join(kwargs['output_folder'], 'data', 'objects')
+  Path(objects_dir).mkdir(parents=True, exist_ok=True)
+  for idx, i in enumerate(kwargs['objects']):
+    path = os.path.join(objects_dir, '{}.json'.format(idx))
+    write_json(path, i, gzip=False)
 
 def copy_media(thumb_size=100, **kwargs):
   if kwargs['vectorize'] == 'image':
