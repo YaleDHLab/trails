@@ -10,6 +10,7 @@ from distutils.dir_util import copy_tree
 from colorthief import ColorThief
 from multiprocessing import Pool
 from urllib.parse import unquote
+from bs4 import BeautifulSoup
 from functools import partial
 from gzip import GzipFile
 from pathlib import Path
@@ -18,6 +19,7 @@ from umap import UMAP
 import numpy as np
 import mimetypes
 import argparse
+import codecs
 import shutil
 import glob2
 import uuid
@@ -32,10 +34,7 @@ TODO:
   Add --vectors flag with one vector per object
   Set the vectorize argument to image if all inputs are images
   Write config.json with kwargs for ui conditionalization
-  Conditionalize the default template selected
   Multiprocess image color extraction
-  Given just text files, create objects with filename attribute
-  Lazy load objects in DOM rather than loading all in objects.json
 '''
 
 config = {
@@ -51,6 +50,8 @@ config = {
   'output_folder': 'output',
   'color_quality': 10,
   'max_iter': 50,
+  'encoding': 'utf8',
+  'xml_base_tag': None,
   'plot_id': str(uuid.uuid1()),
 }
 
@@ -63,8 +64,10 @@ def parse():
   parser.add_argument('--label', type=str, default=config['text'], help='attribute or field that contains label text', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
+  parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing documents', required=False)
   parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
+  parser.add_argument('--xml_base_tag', type=str, default=config['xml_base_tag'], help='the XML tag that contains text to parse', required=False)
   parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='metadata JSON for image inputs', required=False)
   config.update(vars(parser.parse_args()))
   validate_config(**config)
@@ -167,6 +170,8 @@ def get_objects(**kwargs):
 
   Supported mimetypes:
     * text/plain
+    * text/xml
+    * text/html
     * application/json
     * image/jpeg
     * image/png
@@ -187,6 +192,9 @@ def get_objects(**kwargs):
       # plaintext inputs
       elif mimetype == 'text/plain':
         o = get_plaintext_object(path, **kwargs)
+        objects.append(o)
+      elif mimetype in ['text/xml', 'text/html']:
+        o = get_xml_object(path, **kwargs)
         objects.append(o)
       # image inputs
       elif mimetype_base == 'image':
@@ -228,8 +236,20 @@ def get_json_objects(path, **kwargs):
 def get_plaintext_object(path, **kwargs):
   bn = os.path.basename(path)
   meta = kwargs['metadata'].get(format_filename(bn), {})
-  with open(path) as f:
+  with codecs.open(path, 'r', kwargs['encoding']) as f:
     text = Plaintext(text=f.read(), label=bn)
+    text.update(meta)
+    return text
+
+def get_xml_object(path, **kwargs):
+  bn = os.path.basename(path)
+  meta = kwargs['metadata'].get(format_filename(bn), {})
+  with codecs.open(path, 'r', kwargs['encoding']) as f:
+    soup = BeautifulSoup(f, 'html.parser')
+    if kwargs.get('xml_base_tag'):
+      soup = soup.find(kwargs['xml_base_tag'])
+    text = ' '.join(soup.get_text().split())
+    text = Plaintext(text=text, label=bn)
     text.update(meta)
     return text
 
