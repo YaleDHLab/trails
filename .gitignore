@@ -13,6 +13,7 @@ archive
 cache
 build
 dist
+cache
 datasets
 trails/trails/web/assets/data
 deploy*
