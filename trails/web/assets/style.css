@@ -56,6 +56,18 @@ a {
  * Textures
  **/
 
+.particle-texture::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url(images/particle-texture.jpg);
+  opacity: 0.2;
+  background-size: 140px;
+}
+
 .paper-texture::after {
   content: '';
   position: absolute;
@@ -68,6 +80,23 @@ a {
   background-size: 100px;
 }
 
+.glow::before {
+  border: 1px solid #f5f1ed;
+  box-shadow: 0 0 0.05rem rgb(255 255 255 / 40%),
+              0 0 0.05rem rgb(255 255 255 / 40%),
+              0 0 0.5rem rgb(255 255 255 / 40%),
+              0 0 0.2rem rgb(255 255 255 / 40%),
+              0 0 0.7rem rgb(255 255 255 / 40%),
+        inset 0 0 0.325rem rgb(255 255 255 / 40%);
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+}
+
 /**
 * Preview
 **/
@@ -75,87 +104,76 @@ a {
 .preview {
   position: absolute;
   z-index: 10;
-  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-}
-
-.preview.hovered {
-  z-index: 11;
-}
-
-.preview-image {
-  background-color: #ddd;
-  background-image: none;
-  background-size: cover;
-  background-position: center top;
-  border: 1px solid #555;
-  border-radius: 100%;
-  opacity: 1;
   animation-name: increase-scale;
   animation-duration: 0.6s;
   animation-fill-mode: forwards;
   animation-timing-function: cubic-bezier(.22,1.16,.69,1.28);
   transform: scale(0.01);
-  overflow: hidden;
-  width: 50px;
-  height: 50px;
 }
 
-.preview-image::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background-image: url(images/particle-texture.jpg);
-  opacity: 0.2;
+.preview.paper-texture::after {
   border-radius: 100%;
-  background-size: 140px;
-  background-repeat: no-repeat;
 }
 
-.small .preview-image {
+.preview.hovered {
+  z-index: 11;
+  animation: increase-scale 0.3s forwards;
+  animation-delay: 0s !important;
+}
+
+.preview.small {
   animation-name: decrease-scale;
   animation-delay: 0s !important;
 }
 
-.hovered .preview-image {
-  animation: increase-scale 0.3s forwards, pulse-dark 2s infinite;
-  animation-delay: 0s !important;
+body.night-mode .preview.hovered {
+  animation: increase-scale 0.3s forwards;
 }
 
-body.night-mode .preview-image {
-  border: 1px solid #afafaf;
-  box-shadow: 0 0 .05rem rgba(255, 255, 255, 0.4),
-              0 0 .05rem rgba(255, 255, 255, 0.4),
-              0 0 0.5rem rgba(255, 255, 255, 0.4),
-              0 0 0.2rem rgba(255, 255, 255, 0.4),
-              0 0 0.7rem rgba(255, 255, 255, 0.4),
-              inset 0 0 0.325rem rgba(255, 255, 255, 0.4);
+.preview-image {
+  background-image: none;
+  background-size: cover;
+  background-position: center top;
+  border-radius: 100%;
+  opacity: 1;
+  overflow: hidden;
 }
 
-body.night-mode .hovered .preview-image {
-  animation: increase-scale 0.3s forwards, pulse-light 2s infinite;
+.preview.hovered .preview-image {
+  animation: pulse-dark 2s infinite;
+}
+
+body.night-mode .preview.hovered .preview-image {
+  animation: pulse-light 2s infinite;
+}
+
+.preview-image.paper-texture::after {
+  border-radius: 100%;
+}
+
+.preview-label,
+.tooltip {
+  background-color: #f5f1ed;
 }
 
 .preview-label {
   position: absolute;
-  top: 58px;
   padding: 2px 5px;
   font-size: 11px;
   font-family: 'Noto Sans Display', sans-serif;
   text-transform: uppercase;
   animation: swing-z 1.5s forwards;
   white-space: nowrap;
-  display: none;
   box-shadow: 0 0 5px #333;
-  background: #fff;
-  color: #000;
-  pointer-events: none;
+  color: #362d23;
+}
+
+.preview.has-image .preview-label {
+  bottom: -27px;
 }
 
 .preview.hovered .preview-label {
@@ -168,19 +186,19 @@ body.night-mode .hovered .preview-image {
 
 @keyframes decrease-scale {
   0% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   100% {
-    transform: scale(0.4);
+    transform: translate(-50%, -50%) scale(0.5);
   }
 }
 
 @keyframes increase-scale {
   0% {
-    transform: scale(0.1);
+    transform: translate(-50%, -50%) scale(0.1);
   }
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
@@ -289,7 +307,7 @@ body.night-mode .tooltip-hover {
  * Tooltip Click: Wikipedia Bio
  **/
 
-.wiki-bio {
+.tooltip {
   width: 0px;
   height: 0px;
   padding: 10px;
@@ -304,32 +322,33 @@ body.night-mode .tooltip-hover {
   background-size: 130px;
 }
 
-.wiki-bio > * {
+.tooltip > * {
   opacity: 0;
   animation: 0.5s fade-in 1s forwards;
 }
 
-.wiki-image {
+.tooltip-image {
   height: 130px;
   width: 130px;
   background-size: cover;
   flex: 0 0 130px;
   margin-right: 10px;
+  box-shadow: 0 0 3px grey;
 }
 
-.wiki-bio .col {
+.tooltip .col {
   overflow: hidden;
   text-overflow: ellipsis;
   height: 100%;
 }
 
-.wiki-icon {
+.tooltip-icon {
   height: 20px;
 }
 
-.wiki-bio p {
+.tooltip p {
   font-size: 0.775em;
-  color: #777;
+  color: #362d23;
   line-height: 1.25em;
 }
 
@@ -338,7 +357,7 @@ body.night-mode .tooltip-hover {
     background-color: #383838;
   }
   100% {
-    background-color: #fff;
+    background-color: #f5f1ed;
   }
 }
 

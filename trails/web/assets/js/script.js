@@ -3,6 +3,7 @@
  *  - recently viewed list
  *  - improve touchtexture sizing when zoomed in
  *  - set attribute of so points with previews have large size in gl
+ *  - determine whether a point has attrs required to render preview
  **/
 
 var dpi = window.devicePixelRatio || 1;
@@ -15,17 +16,19 @@ function State() {
   this.points = {
     size: 1.0,
     colors: 'blues',
+    glow: false,
   };
   this.previews = {
     number: 50,
     size: 50,
+    margin: 50,
   };
   this.glow = {
     exposure: 2.0,
     threshold: 0.21,
     strength: 1.2,
     radius: 0.55,
-  }
+  };
 };
 
 /**
@@ -110,7 +113,7 @@ World.prototype.useDayMode = function() {
 
 World.prototype.render = function() {
   requestAnimationFrame(this.render.bind(this));
-  if (points.initialized && points.mesh.material.uniforms.useNightMode.value > 0.5) {
+  if (points.initialized && state.points.glow) {
     this.composer.render();
   } else {
     this.renderer.render(world.scene, world.camera);
@@ -140,40 +143,40 @@ Points.prototype.init = function() {
   this.positions = [];
   this.objects = [];
   this.colors = [];
-  this.n = 100000;
-  this.cmap = state.points.colors === 'perlin'
-    ? function() {return {r: 0, g: 0, b: 0}}
-    : interpolateArray(colorScales[state.points.colors]);
-  Promise.all([
-    fetch('data/objects.json'),
-    fetch('data/positions.json'),
-    fetch('data/colors.json'),
-  ]).then(results => {
-    const [objects, positions, colors] = results;
-    objects.json().then(json => {
-      this.objects = json.slice(0, this.n);
-      this.initialize();
-    })
-    colors.json().then(json => {
-      this.colors = json.slice(0, this.n);
-      this.initialize();
-    })
-    positions.json().then(json => {
-      this.positions = json.slice(0, this.n);
-      this.initialize();
-    })
-  })
+  this.n = null;
+  this.max = 150000;
+  get('data/positions.json.gz', this.handleDataJson.bind(this, 'positions'))
+  get('data/colors.json.gz', this.handleDataJson.bind(this, 'colors'))
 }
 
-Points.prototype.setColors = function(val) {
+Points.prototype.handleDataJson = function(attr, json) {
+  this[attr] = json.slice(0, this.max);
+  this.n = this[attr].length;
+  this.initialize();
+}
+
+Points.prototype.setColors = function() {
+  // get the new colortype
+  val = state.points.colors;
+  // set perlin uniform
   if (val === 'perlin') {
     this.mesh.material.uniforms.usePerlin.value = 1.0;
+  // create non-perlin color attributes
   } else {
-    this.cmap = interpolateArray(colorScales[val]);
+    // handle the case of 1d colors
+    if (typeof this.colors[0] !== 'object') {
+      this.cmap = interpolateArray(colorScales[val]);
+    }
     var colors = new Float32Array(this.positions.length * 3),
         index = 0;
-    for (var i=0; i<this.positions.length; i++) {
-      var color = this.cmap((this.colors || {})[i] || 0);
+    for (var i=0; i<this.colors.length; i++) {
+      var color = this.colors[i].length === 3
+        ? {
+            r: this.colors[i][0]/255,
+            g: this.colors[i][1]/255,
+            b: this.colors[i][2]/255,
+          }
+        : this.cmap((this.colors || {})[i] || 0);
       colors[index++] = color.r;
       colors[index++] = color.g;
       colors[index++] = color.b;
@@ -190,7 +193,7 @@ Points.prototype.setAttribute = function(name, arr) {
 }
 
 Points.prototype.initialize = function() {
-  if (this.positions.length && this.objects.length && this.colors.length) {
+  if (this.positions.length && this.colors.length) {
     this.createMesh();
     // initialize downstream layers that depend on this mesh
     picker.init();
@@ -213,13 +216,9 @@ Points.prototype.createMesh = function() {
       clickColorIterator = 0;
   for (var i=0; i<this.positions.length; i++) {
     clickColor.setHex(i + 1);
-    var color = this.cmap((this.colors || {})[i] || Math.random());
     translations[translationIterator++] = this.positions[i][0];
     translations[translationIterator++] = this.positions[i][1];
     translations[translationIterator++] = 0;
-    colors[colorIterator++] = color.r;
-    colors[colorIterator++] = color.g;
-    colors[colorIterator++] = color.b;
     clickColors[clickColorIterator++] = clickColor.r;
     clickColors[clickColorIterator++] = clickColor.g;
     clickColors[clickColorIterator++] = clickColor.b;
@@ -239,68 +238,69 @@ Points.prototype.createMesh = function() {
   // build the mesh
   this.mesh = new THREE.Points(geometry, this.getMaterial());
   this.mesh.frustumCulled = false;
+  this.setColors();
   world.scene.add(this.mesh);
 }
 
 Points.prototype.getMaterial = function() {
   var perlin = `
-      // Perlin Noise by Sushindhran Harikrishnan
-      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-      vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-      vec3 fade(vec3 t) { return t*t*t*(t*(t*6.0-15.0)+10.0); }
-      float noise(vec3 P) {
-          vec3 i0 = mod289(floor(P)), i1 = mod289(i0 + vec3(1.0));
-          vec3 f0 = fract(P), f1 = f0 - vec3(1.0), f = fade(f0);
-          vec4 ix = vec4(i0.x, i1.x, i0.x, i1.x), iy = vec4(i0.yy, i1.yy);
-          vec4 iz0 = i0.zzzz, iz1 = i1.zzzz;
-          vec4 ixy = permute(permute(ix) + iy), ixy0 = permute(ixy + iz0), ixy1 = permute(ixy + iz1);
-          vec4 gx0 = ixy0 * (1.0 / 7.0), gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
-          vec4 gx1 = ixy1 * (1.0 / 7.0), gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
-          gx0 = fract(gx0); gx1 = fract(gx1);
-          vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0), sz0 = step(gz0, vec4(0.0));
-          vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1), sz1 = step(gz1, vec4(0.0));
-          gx0 -= sz0 * (step(0.0, gx0) - 0.5); gy0 -= sz0 * (step(0.0, gy0) - 0.5);
-          gx1 -= sz1 * (step(0.0, gx1) - 0.5); gy1 -= sz1 * (step(0.0, gy1) - 0.5);
-          vec3 g0 = vec3(gx0.x,gy0.x,gz0.x), g1 = vec3(gx0.y,gy0.y,gz0.y),
-              g2 = vec3(gx0.z,gy0.z,gz0.z), g3 = vec3(gx0.w,gy0.w,gz0.w),
-              g4 = vec3(gx1.x,gy1.x,gz1.x), g5 = vec3(gx1.y,gy1.y,gz1.y),
-              g6 = vec3(gx1.z,gy1.z,gz1.z), g7 = vec3(gx1.w,gy1.w,gz1.w);
-          vec4 norm0 = taylorInvSqrt(vec4(dot(g0,g0), dot(g2,g2), dot(g1,g1), dot(g3,g3)));
-          vec4 norm1 = taylorInvSqrt(vec4(dot(g4,g4), dot(g6,g6), dot(g5,g5), dot(g7,g7)));
-          g0 *= norm0.x; g2 *= norm0.y; g1 *= norm0.z; g3 *= norm0.w;
-          g4 *= norm1.x; g6 *= norm1.y; g5 *= norm1.z; g7 *= norm1.w;
-          vec4 nz = mix(vec4(dot(g0, vec3(f0.x, f0.y, f0.z)), dot(g1, vec3(f1.x, f0.y, f0.z)),
-              dot(g2, vec3(f0.x, f1.y, f0.z)), dot(g3, vec3(f1.x, f1.y, f0.z))),
-              vec4(dot(g4, vec3(f0.x, f0.y, f1.z)), dot(g5, vec3(f1.x, f0.y, f1.z)),
-                  dot(g6, vec3(f0.x, f1.y, f1.z)), dot(g7, vec3(f1.x, f1.y, f1.z))), f.z);
-          return 2.2 * mix(mix(nz.x,nz.z,f.y), mix(nz.y,nz.w,f.y), f.x);
+    // Perlin Noise by Sushindhran Harikrishnan
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    vec3 fade(vec3 t) { return t*t*t*(t*(t*6.0-15.0)+10.0); }
+    float noise(vec3 P) {
+      vec3 i0 = mod289(floor(P)), i1 = mod289(i0 + vec3(1.0));
+      vec3 f0 = fract(P), f1 = f0 - vec3(1.0), f = fade(f0);
+      vec4 ix = vec4(i0.x, i1.x, i0.x, i1.x), iy = vec4(i0.yy, i1.yy);
+      vec4 iz0 = i0.zzzz, iz1 = i1.zzzz;
+      vec4 ixy = permute(permute(ix) + iy), ixy0 = permute(ixy + iz0), ixy1 = permute(ixy + iz1);
+      vec4 gx0 = ixy0 * (1.0 / 7.0), gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
+      vec4 gx1 = ixy1 * (1.0 / 7.0), gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
+      gx0 = fract(gx0); gx1 = fract(gx1);
+      vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0), sz0 = step(gz0, vec4(0.0));
+      vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1), sz1 = step(gz1, vec4(0.0));
+      gx0 -= sz0 * (step(0.0, gx0) - 0.5); gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+      gx1 -= sz1 * (step(0.0, gx1) - 0.5); gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+      vec3 g0 = vec3(gx0.x,gy0.x,gz0.x), g1 = vec3(gx0.y,gy0.y,gz0.y),
+        g2 = vec3(gx0.z,gy0.z,gz0.z), g3 = vec3(gx0.w,gy0.w,gz0.w),
+        g4 = vec3(gx1.x,gy1.x,gz1.x), g5 = vec3(gx1.y,gy1.y,gz1.y),
+        g6 = vec3(gx1.z,gy1.z,gz1.z), g7 = vec3(gx1.w,gy1.w,gz1.w);
+      vec4 norm0 = taylorInvSqrt(vec4(dot(g0,g0), dot(g2,g2), dot(g1,g1), dot(g3,g3)));
+      vec4 norm1 = taylorInvSqrt(vec4(dot(g4,g4), dot(g6,g6), dot(g5,g5), dot(g7,g7)));
+      g0 *= norm0.x; g2 *= norm0.y; g1 *= norm0.z; g3 *= norm0.w;
+      g4 *= norm1.x; g6 *= norm1.y; g5 *= norm1.z; g7 *= norm1.w;
+      vec4 nz = mix(vec4(dot(g0, vec3(f0.x, f0.y, f0.z)), dot(g1, vec3(f1.x, f0.y, f0.z)),
+        dot(g2, vec3(f0.x, f1.y, f0.z)), dot(g3, vec3(f1.x, f1.y, f0.z))),
+        vec4(dot(g4, vec3(f0.x, f0.y, f1.z)), dot(g5, vec3(f1.x, f0.y, f1.z)),
+          dot(g6, vec3(f0.x, f1.y, f1.z)), dot(g7, vec3(f1.x, f1.y, f1.z))), f.z);
+      return 2.2 * mix(mix(nz.x,nz.z,f.y), mix(nz.y,nz.w,f.y), f.x);
+    }
+    float noise(vec2 P) { return noise(vec3(P, 0.0)); }
+    float fractal(vec3 P) {
+      float f = 0., s = 1.;
+      for (int i = 0 ; i < 9 ; i++) {
+        f += noise(s * P) / s;
+        s *= 2.;
+        P = vec3(.866 * P.x + .5 * P.z, P.y + 100., -.5 * P.x + .866 * P.z);
       }
-      float noise(vec2 P) { return noise(vec3(P, 0.0)); }
-      float fractal(vec3 P) {
-          float f = 0., s = 1.;
-          for (int i = 0 ; i < 9 ; i++) {
-              f += noise(s * P) / s;
-              s *= 2.;
-              P = vec3(.866 * P.x + .5 * P.z, P.y + 100., -.5 * P.x + .866 * P.z);
-          }
-          return f;
+      return f;
+    }
+    float turbulence(vec3 P) {
+      float f = 0., s = 1.;
+      for (int i = 0 ; i < 9 ; i++) {
+        f += abs(noise(s * P)) / s;
+        //s *= 2.0;
+        P = vec3(.866 * P.x + .5 * P.z, P.y + 100., -.5 * P.x + .866 * P.z);
       }
-      float turbulence(vec3 P) {
-          float f = 0., s = 1.;
-          for (int i = 0 ; i < 9 ; i++) {
-              f += abs(noise(s * P)) / s;
-              //s *= 2.0;
-              P = vec3(.866 * P.x + .5 * P.z, P.y + 100., -.5 * P.x + .866 * P.z);
-          }
-          return f;
-      }
+      return f;
+    }
 
-      vec3 clouds(float x, float y) {
-          float L = turbulence(vec3(x, y, time * .05));
-          return vec3(noise(vec3(.5, .5, L) * .7));
-      }
+    vec3 clouds(float x, float y) {
+      float L = turbulence(vec3(x, y, time * .025));
+      return vec3(noise(vec3(.5, .5, L) * 1.2));
+    }
   `
 
   return new THREE.RawShaderMaterial({
@@ -386,7 +386,6 @@ Points.prototype.getMaterial = function() {
         // get point shape
         float r = length(gl_PointCoord - vec2(0.5));
         if (r > 0.5) discard;
-
         if (useNightMode > 0.5) {
           gl_FragColor = vec4(vColor, 1.0);
         } else {
@@ -572,13 +571,13 @@ TouchTexture.prototype.update = function(delta) {
   if (this.frozen) return;
   this.clear();
   // age points
-  this.trail.forEach((point, i) => {
+  this.trail.forEach(function(point, i) {
     point.age++;
     // remove old
     if (point.age > this.maxAge) {
       this.trail.splice(i, 1);
     }
-  });
+  }.bind(this));
   this.trail.forEach(this.drawPoint.bind(this));
   this.drawCursor();
   this.texture.needsUpdate = true;
@@ -618,7 +617,7 @@ TouchTexture.prototype.drawPoint = function(point) {
     intensity = easeOutSine(1 - (point.age - this.maxAge * 0.3) / (this.maxAge * 0.7), 0, 1, 1);
   }
   intensity *= point.force;
-  var radius = this.size * this.radius * intensity;
+  var radius = Math.max(this.size * this.radius * intensity, 0);
   var gradient = this.ctx.createRadialGradient(pos.x, pos.y, radius * 0.25, pos.x, pos.y, radius);
   gradient.addColorStop(0, `rgba(255, 255, 255, 0.2)`);
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
@@ -732,10 +731,10 @@ function Tooltip() {
 }
 
 // index is the cell index to show; type is hover|click
-Tooltip.prototype.display = function(index) {
+Tooltip.prototype.display = async function(index) {
   clearTimeout(this.timeout);
-  // bail if cell metadata isn't available
-  if (!points || !points.objects.length) return;
+  // bail if points aren't rendered
+  if (!points.initialized) return;
   // bail if the user requested the item we're already showing
   if (index === this.displayed) return;
   this.displayed = index;
@@ -743,7 +742,7 @@ Tooltip.prototype.display = function(index) {
   this.worldCoords = screenToWorldCoords(mouse);
   this.setPosition();
   // get the html to display
-  this.target.innerHTML = this.getTooltipHTML(index)
+  this.target.innerHTML = await this.getTooltipHTML(index)
 }
 
 Tooltip.prototype.setPosition = function() {
@@ -753,16 +752,21 @@ Tooltip.prototype.setPosition = function() {
 }
 
 Tooltip.prototype.close = function() {
-  this.displayed = -1;
-  this.worldCoords = null;
-  this.target.innerHTML = '';
+  if (this.displayed > -1) {
+    this.displayed = -1;
+    this.worldCoords = null;
+    this.target.innerHTML = '';
+  }
 }
 
-Tooltip.prototype.getTooltipHTML = function(index) {
+Tooltip.prototype.getTooltipHTML = async function(index) {
+  var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
   return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
-    data: points.objects[index],
-  });
+    label: data.label,
+    image: data.image,
+    data: data,
+  })
 }
 
 Tooltip.prototype.addEventListeners = function() {
@@ -771,7 +775,7 @@ Tooltip.prototype.addEventListeners = function() {
   }.bind(this));
 
   document.querySelector('#tooltip').addEventListener('wheel', function(e) {
-    e.stopPropagation();
+    //e.stopPropagation();
   }.bind(this));
 
   world.renderer.domElement.addEventListener('pointermove', function(e) {
@@ -788,7 +792,6 @@ function Preview() {
   this.kdbush = null;
   this.hovered = null;
   this.n = state.previews.number;
-  this.margin = 10;
   this.timeout = null;
   this.mouseTimeout = null;
   this.sizes = {}; // size cache, maps id to width & height
@@ -806,41 +809,37 @@ Preview.prototype.createIndex = function(positions) {
 }
 
 // select the set of this.n previews to show
-Preview.prototype.select = function() {
+Preview.prototype.select = async function() {
   var bounds = getWorldBounds();
-  var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort((a, b) => a-b);
+  var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort(function(a, b) {
+    return a-b;
+  });
   for (var i=0; i<indices.length; i++) {
     var index = indices[i];
     // don't stop 'til you get enough
     if (this.selected.length === this.n) break;
-    // ensure the current point has all required attributes
-    var keep = true;
-    for (var j=0; j<this.requiredAttributes.length; j++) {
-      if (!(points.objects[index][this.requiredAttributes[j]])) {
-        keep = false;
-        break;
-      }
-    }
-    if (!keep) continue;
     // create the point object
-    var world = {x: points.positions[index][0], y: points.positions[index][1]};
+    var world = {
+      x: points.positions[index][0],
+      y: points.positions[index][1],
+    };
     var screen = worldToScreenCoords(world);
     var d = {
       x: screen.x,
       y: screen.y,
       index: index,
-      elem: this.getPreviewHTML(index),
     };
-    // ensure the elem exists
-    if (!d.elem) continue;
     // ensure elem doesn't overlap with others
     if (this.overlaps(d)) continue;
     // add the elem to the list to be rendered
+    d.elem = await this.getPreviewHTML(index);
+    // ensure the elem exists
+    if (!d.elem) continue;
     d.elem.style.left = d.x + 'px';
     d.elem.style.top = d.y + 'px';
     this.selected.push(d);
   }
-  // render the selected ids; use documentfragment to prevent reflow after each child is added
+  // documentfragment prevents reflow after each child is added
   var elem = document.querySelector('#previews-container');
   var children = document.createDocumentFragment();
   this.selected.forEach(function(d) {
@@ -855,8 +854,8 @@ Preview.prototype.intersects = function(a, b, d) {
   var bS = this.getElementSize(b); // b size
   var a0 = a[d]; // a starting pos
   var b0 = b[d]; // b starting pos
-  var a1 = a[d] + (d === 'x' ? aS.width : aS.height) + this.margin; // a furthest extension
-  var b1 = b[d] + (d === 'x' ? bS.width : bS.height) + this.margin; // b furthest extension
+  var a1 = a[d] + (d === 'x' ? aS.width : aS.height) + state.previews.margin; // a furthest extension
+  var b1 = b[d] + (d === 'x' ? bS.width : bS.height) + state.previews.margin; // b furthest extension
   return a0 >= b0 && a0 <= b1 ||
          a1 >= b0 && a1 <= b1;
 }
@@ -878,9 +877,18 @@ Preview.prototype.overlaps = function(a) {
 }
 
 Preview.prototype.getElementSize = function(d) {
+  // handle statically sized previews
+  if (state.previews.size) {
+    return {
+      width: state.previews.size,
+      height: state.previews.size,
+    }
+  }
+  // handle conditionally sized previews; first check cache
   if (d.index in this.sizes) {
     return this.sizes[d.index];
   }
+  // then process elements not in cache
   this.elems.offscreen.appendChild(d.elem);
   var box = d.elem.getBoundingClientRect();
   this.elems.offscreen.removeChild(d.elem);
@@ -891,26 +899,27 @@ Preview.prototype.getElementSize = function(d) {
   return this.sizes[d.index];
 }
 
-Preview.prototype.getPreviewHTML = function(index) {
-  if (!points.objects) {
-    clearTimeout(this.timeout);
-    this.timeout = setTimeout(this.getPreviewHTML.bind(this, index), 500);
-    return;
-  }
-  var meta = (points.objects || [])[index];
+Preview.prototype.getPreviewHTML = async function(index) {
+  if (!points.initialized) return;
   // get html string
+  var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
-    data: points.objects[index],
+    label: data.label,
+    image: data.image,
+    size: state.previews.size + 'px',
+    data: data,
   });
   // convert to DOM Element
   var elem = htmlStringToDom(html);
   elem.id = 'preview-' + index;
-  elem.onpointerdown = function(index, e) {
+  elem.onpointerup = function(index, e) {
     // pointermove events are paused while hovering previews, so set mouse coords before showing tooltip
-    mouse.set(e);
     tooltip.display(index);
+    // stop propagation to prevent hovered class from disappearing
     e.stopPropagation();
+    // pass event information to mouse so it doesn't wait for next mouseup event
+    mouse.down = false;
   }.bind(this, index);
   elem.onpointermove = function(index, e) {
     this.setHovered(index);
@@ -918,6 +927,7 @@ Preview.prototype.getPreviewHTML = function(index) {
     e.stopPropagation();
     // pass this event to the touchtexture to facilitate trails
     touchtexture.handlePointerMove(e);
+    mouse.set(e);
   }.bind(this, index);
   return elem;
 }
@@ -932,50 +942,46 @@ Preview.prototype.clear = function() {
 
 Preview.prototype.redraw = function() {
   clearTimeout(this.timeout);
-  if (points.objects.length > 0) {
+  if (points.initialized) {
     this.clear();
     this.select();
-  // run the initial draw once the data becomes available
-  } else {
-    this.timeout = setTimeout(function() {
-      this.redraw();
-    }.bind(this), 500)
   }
 }
 
 // display the hovered cell
-Preview.prototype.setHovered = function(id) {
+Preview.prototype.setHovered = async function(id) {
   // prevent consecutive hovering selections
   clearTimeout(this.mouseTimeout);
   // bail if we're being asked to show the cell we're already showing
-  if (id === this.hovered) return;
-  // clear the old hovered state
-  var previous = document.querySelector('#preview-' + this.hovered);
-  if (previous) previous.classList.remove('hovered');
-  // set the hovered id
-  this.hovered = id;
-  // if the id is -1 clear the hovered cell
-  if (id === -1) {
-    this.elems.hovered.innerHTML = '';
-  // if this point is already previewed, update the element
-  } else if (this.selected.map(i => i.index).indexOf(id) > -1) {
-    // set mouse offscreen to prevent touchtexture focus on point border
-    mouse.set({x: -1000, y: -1000});
-    document.querySelector('#preview-' + id).classList.add('hovered');
-    this.elems.hovered.innerHTML = '';
-  // if the point is not already previewed, create it
-  } else {
-    // otherwise show this cell
-    var elem = this.getPreviewHTML(id, 'hovered');
-    if (!elem) return this.adjustStates();
-    elem.classList.add('hovered');
-    elem.style.left = mouse.x + 'px';
-    elem.style.top = mouse.y + 'px';
-    this.elems.hovered.innerHTML = '';
-    this.elems.hovered.appendChild(elem);
+  if (id !== this.hovered) {
+    // clear the old hovered state
+    var previous = document.querySelector('#preview-' + this.hovered);
+    if (previous) previous.classList.remove('hovered');
+    // set the hovered id
+    this.hovered = id;
+    // if the id is -1 clear the hovered cell
+    if (id === -1) {
+      this.elems.hovered.innerHTML = '';
+    // if this point is already previewed, update the element
+    } else if (this.selected.map(function(i) {return i.index}).indexOf(id) > -1) {
+      // set mouse offscreen to prevent touchtexture focus on point border
+      mouse.set({x: -1000, y: -1000});
+      document.querySelector('#preview-' + id).classList.add('hovered');
+      this.elems.hovered.innerHTML = '';
+    // if the point is not already previewed, create it
+    } else {
+      // otherwise show this cell
+      var elem = await this.getPreviewHTML(id, 'hovered');
+      if (!elem) return this.adjustStates();
+      elem.classList.add('hovered');
+      elem.style.left = mouse.x + 'px';
+      elem.style.top = mouse.y + 'px';
+      this.elems.hovered.innerHTML = '';
+      this.elems.hovered.appendChild(elem);
+    }
+    // shrink cells close to the mouse
+    this.adjustStates();
   }
-  // shrink cells close to the mouse
-  this.adjustStates();
 }
 
 // adjust the size of previews near the hovered elem
@@ -1178,8 +1184,8 @@ Lasso.prototype.draw = function() {
 
 Lasso.prototype.highlightSelected = function() {
   // create the attribute for the selected cells
-  var attr = new Float32Array(points.objects.length);
-  for (var i=0; i<points.objects.length; i++) {
+  var attr = new Float32Array(points.n);
+  for (var i=0; i<points.n; i++) {
     attr[i] = this.selected[i] ? 1.0 : 0.0;
   }
   points.setAttribute('selected', attr);
@@ -1469,6 +1475,23 @@ function Mouse() {
   this.addEventListeners();
 }
 
+Mouse.prototype.getEventMeta = function(e) {
+  return {
+    bubbles: true,
+    detail: {
+      e: e,
+      dragging: this.dragging,
+      pos: getEventScreenCoords(e),
+    }
+  }
+}
+
+Mouse.prototype.set = function(e) {
+  var p = getEventScreenCoords(e);
+  this.x = p.x;
+  this.y = p.y;
+}
+
 Mouse.prototype.addEventListeners = function() {
 
   window.addEventListener('pointermove', function(e) {
@@ -1494,23 +1517,6 @@ Mouse.prototype.addEventListeners = function() {
 
 }
 
-Mouse.prototype.getEventMeta = function(e) {
-  return {
-    bubbles: true,
-    detail: {
-      e: e,
-      dragging: this.dragging,
-      pos: getEventScreenCoords(e),
-    }
-  }
-}
-
-Mouse.prototype.set = function(e) {
-  var p = getEventScreenCoords(e);
-  this.x = p.x;
-  this.y = p.y;
-}
-
 /**
  * GUI
  **/
@@ -1523,7 +1529,7 @@ function GUI() {
     points.mesh.material.uniforms.size.value = val;
   }.bind(this));
   folder.add(state.points, 'colors', ['blues', 'plasma', 'viridis', 'magma', 'perlin']).onChange(function(val) {
-    points.setColors(val);
+    points.setColors();
   })
   // previews
   var folder = this.gui.addFolder('Previews');
@@ -1533,6 +1539,10 @@ function GUI() {
   }.bind(this));
   folder.add(state.previews, 'size', 0, 200).onFinishChange(function(val) {
     preview.size = parseInt(val);
+    preview.redraw();
+  }.bind(this))
+  folder.add(state.previews, 'margin', 0, 200).onFinishChange(function(val) {
+    preview.margin = parseInt(val);
     preview.redraw();
   }.bind(this))
   // bloom
@@ -1648,6 +1658,48 @@ function htmlStringToDom(s) {
   var wrapper = document.createElement('div');
   wrapper.innerHTML = s;
   return wrapper.firstChild.nextSibling;
+}
+
+function get(url, onSuccess, onErr) {
+  onSuccess = onSuccess || function() {};
+  onErr = onErr || function() {};
+  var xhr = new XMLHttpRequest();
+  xhr.overrideMimeType('text\/plain; charset=x-user-defined');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState == XMLHttpRequest.DONE) {
+      if (xhr.status === 200) {
+        var data = xhr.responseText;
+        // unzip the data if necessary
+        if (url.substring(url.length-3) == '.gz') {
+          data = gunzip(data);
+          url = url.substring(0, url.length-3);
+        }
+        // determine if data can be JSON parsed
+        url.substring(url.length-5) == '.json'
+          ? onSuccess(JSON.parse(data))
+          : onSuccess(data);
+      } else {
+        onErr(xhr)
+      }
+    };
+  };
+  xhr.open('GET', url, true);
+  xhr.send();
+};
+
+function gunzip(data) {
+  var bytes = [];
+  for (var i=0; i<data.length; i++) {
+    bytes.push(data.charCodeAt(i) & 0xff);
+  }
+  var gunzip = new Zlib.Gunzip(bytes);
+  var plain = gunzip.decompress();
+  // Create ascii string from byte sequence
+  var asciistring = '';
+  for (var i=0; i<plain.length; i++) {
+    asciistring += String.fromCharCode(plain[i]);
+  }
+  return asciistring;
 }
 
 /**

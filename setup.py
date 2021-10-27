@@ -30,6 +30,7 @@ setup(
   author_email='douglas.duhaime@gmail.com',
   license='MIT',
   install_requires=[
+    'beautifulsoup4==4.9.3',
     'colorthief==0.2.1',
     'glob2==0.7',
     'imageio==2.9.0',

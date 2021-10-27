@@ -4,7 +4,7 @@
 
 ![App preview](/trails/web/assets/images/preview.png?raw=true)
 
-# Usage
+# Basic Usage
 
 ```
 # install the app
@@ -14,7 +14,7 @@ pip install git+https://github.com/YaleDHLab/trails.git
 wget https://lab-data-collections.s3.amazonaws.com/wiki-people.json
 
 # process the wiki-people.json file using the "abstract" field for vectorization
-trails --input "wiki-people.json" --text "abstract"
+trails --input "wiki-people.json" --text "abstract" --label "name"
 ```
 
 # Customizing UI

@@ -22,28 +22,39 @@
 
       <!-- PREVIEW_TEMPLATE -->
       <script type='x-html/x-template' id='preview-template'>
-        <div class='preview'>
-          <div class='preview-image paper-texture'
-            style='background-image: url("<%- data.thumbnail %>");
-                   animation-delay: <%- Math.random() + "s" %>'></div>
-          <div class='preview-label paper-texture'><%= data.name.replaceAll('_', ' ') %></div>
+        <% var previewClass = 'preview ' %>
+        <% if (image) previewClass += 'has-image ' %>
+        <% if (label) previewClass += 'has-label ' %>
+        <% getLocalPath = function(value) { %>
+          <% return value ? value.split(/[\\/]/).pop() : ''; %>
+        <% } %>
+
+        <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
+          <% if (image) { %>
+            <div class='preview-image paper-texture glow'
+              style='background-image: url("data/thumbs/<%- getLocalPath(image) %>");
+                     height: <%- size %>;
+                     width:  <%- size %>;'></div>
+          <% } %>
+          <% if (label) { %>
+            <div class='preview-label paper-texture glow'><%= label %></div>
+          <% } %>
         </div>
       </script>
 
       <!-- TOOLTIP_TEMPLATE -->
       <script type='x-html/x-template' id='tooltip-template'>
-        <div class="wiki-bio row align-center paper-texture">
-          <div class="wiki-image" style='background-image:url("<%- data.thumbnail %>")'></div>
+        <div class="tooltip row align-center paper-texture">
+          <% if (image) { %>
+            <div class="tooltip-image" style='background-image:url("data/originals/<%- getLocalPath(image) %>")'></div>
+          <% } %>
           <div class="col ">
             <div class="row space-between">
-              <div class="col wiki-name">
-                <%= data.name.replaceAll('_', ' ').replaceAll(/ *\([^)]*\) */g, '') %>
+              <div class="col">
+                <%= (label || '').replaceAll('_', ' ').replaceAll(/ *\([^)]*\) */g, '') %>
               </div>
-              <a href="https://en.wikipedia.org/wiki/<%= data.name %>" target="_blank">
-                <img class="wiki-icon" src="assets/images/wikipedia-icon.svg">
-              </a>
             </div>
-            <p><%= data.abstract %></p>
+            <p><%= (data.text || '') %></p>
           </div>
         </div>
       </script>
