@@ -26,13 +26,13 @@
         <% if (image) previewClass += 'has-image ' %>
         <% if (label) previewClass += 'has-label ' %>
         <% getLocalPath = function(value) { %>
-          return value ? value.split(/[\\/]/)[0] : '';
+          <% return value ? value.split(/[\\/]/).pop() : ''; %>
         <% } %>
 
         <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
           <% if (image) { %>
             <div class='preview-image paper-texture glow'
-              style='background-image: url("data/thumbs/<%- image %>");
+              style='background-image: url("data/thumbs/<%- getLocalPath(image) %>");
                      height: <%- size %>;
                      width:  <%- size %>;'></div>
           <% } %>
