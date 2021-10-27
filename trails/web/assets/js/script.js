@@ -21,7 +21,7 @@ function State() {
   this.previews = {
     number: 50,
     size: 50,
-    margin: 50,
+    margin: 80,
   };
   this.glow = {
     exposure: 2.0,
@@ -829,23 +829,29 @@ Preview.prototype.select = async function() {
       y: screen.y,
       index: index,
     };
-    // ensure elem doesn't overlap with others
-    if (this.overlaps(d)) continue;
-    // add the elem to the list to be rendered
-    d.elem = await this.getPreviewHTML(index);
-    // ensure the elem exists
-    if (!d.elem) continue;
-    d.elem.style.left = d.x + 'px';
-    d.elem.style.top = d.y + 'px';
-    this.selected.push(d);
+    // if the element doesn't overlap others, add it to the render list
+    if (!this.overlaps(d)) {
+      d.elem = this.getPreviewHTML(index);
+      this.selected.push(d);
+    }
   }
-  // documentfragment prevents reflow after each child is added
-  var elem = document.querySelector('#previews-container');
-  var children = document.createDocumentFragment();
-  this.selected.forEach(function(d) {
-    children.appendChild(d.elem);
-  })
-  elem.appendChild(children);
+  // load all object metadata
+  Promise.all(this.selected.map(d => d.elem)).then(function(results) {
+    // set the loaded html objects and their positions
+    results.map((r, ridx) => {
+      var s = this.selected[ridx];
+      s.elem = r;
+      s.elem.style.left = s.x + 'px';
+      s.elem.style.top = s.y + 'px';
+    });
+    // documentfragment prevents reflow after each child is added
+    var elem = document.querySelector('#previews-container');
+    var children = document.createDocumentFragment();
+    this.selected.forEach(function(d) {
+      children.appendChild(d.elem);
+    })
+    elem.appendChild(children);
+  }.bind(this))
 }
 
 // a & b are objects with x,y,index,elem attrs; d == x|y
