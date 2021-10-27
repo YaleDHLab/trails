@@ -181,7 +181,8 @@ def get_objects(**kwargs):
   objects = []
   unparsed = []
   paths = glob2.glob(kwargs['inputs'])
-  with tqdm(total=len(paths)) as progress_bar:
+  total = min(len(paths), kwargs['limit']) if kwargs.get('limit') else len(paths)
+  with tqdm(total=total) as progress_bar:
     for path in paths:
       mimetype = get_mimetype(path)
       mimetype_base = mimetype.split('/')[0] if mimetype else ''
@@ -260,7 +261,11 @@ def get_image_object(path, **kwargs):
   im = Image(path=path, label=formatted_bn, image=formatted_bn)
   im.update(meta)
   # make sure images load
-  return im if im['image'] else None
+  try:
+    im['__load_image__']
+    return im
+  except:
+    return None
 
 def get_mimetype(path, full=True):
   '''Given a filepath, return the mimetype'''
