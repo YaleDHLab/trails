@@ -764,7 +764,7 @@ Tooltip.prototype.getTooltipHTML = async function(index) {
   return _.template(document.querySelector('#tooltip-template').innerHTML)({
     index: index,
     label: data.label,
-    image: data.filename,
+    image: data.image,
     data: data,
   })
 }
@@ -906,7 +906,7 @@ Preview.prototype.getPreviewHTML = async function(index) {
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
     label: data.label,
-    image: data.filename,
+    image: data.image,
     size: state.previews.size + 'px',
     data: data,
   });

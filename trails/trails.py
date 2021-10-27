@@ -257,7 +257,7 @@ def get_image_object(path, **kwargs):
   bn = os.path.basename(path)
   formatted_bn = format_filename(bn)
   meta = kwargs['metadata'].get(formatted_bn, {})
-  im = Image(path=path, label=formatted_bn, filename=formatted_bn)
+  im = Image(path=path, label=formatted_bn, image=formatted_bn)
   im.update(meta)
   # make sure images load
   return im if im['image'] else None
@@ -302,7 +302,7 @@ def get_vectors(**kwargs):
           continue
         try:
           # this next line uses the __missing__ handler to lazily load the image into RAM
-          im = preprocess_input( img_to_array( i['image'].resize((299,299)) ) )
+          im = preprocess_input( img_to_array( i['__load_image__'].resize((299,299)) ) )
           vec = model.predict(np.expand_dims(im, 0)).squeeze()
           vecs.append(vec)
           progress_bar.update(1)
@@ -421,7 +421,7 @@ def copy_media(thumb_size=100, **kwargs):
         # process originals
         shutil.copy(i['path'], os.path.join(originals_dir, name))
         # process thumbs
-        im = i['image']
+        im = i['__load_image__']
         w, h = im.size
         width = thumb_size
         height = int(h * (thumb_size / w))

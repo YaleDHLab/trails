@@ -26,7 +26,7 @@
         <% if (image) previewClass += 'has-image ' %>
         <% if (label) previewClass += 'has-label ' %>
         <% getLocalPath = function(value) { %>
-          return value ? value.split(/[\\/]/).pop() : '';
+          <% return value ? value.split(/[\\/]/).pop() : ''; %>
         <% } %>
 
         <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
