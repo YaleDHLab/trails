@@ -445,10 +445,6 @@ Points.prototype.getMaterial = function() {
   });
 }
 
-Points.prototype.loadObject = function(idx, callback) {
-  return get('data/objects/' + idx + '.json', callback)
-}
-
 Points.prototype.update = function() {
   if (this.mesh) this.mesh.material.uniforms.time.value += world.clock.getDelta();
 }
@@ -735,10 +731,10 @@ function Tooltip() {
 }
 
 // index is the cell index to show; type is hover|click
-Tooltip.prototype.display = function(index) {
+Tooltip.prototype.display = async function(index) {
   clearTimeout(this.timeout);
-  // bail if cell metadata isn't available
-  if (!points || !points.mesh) return;
+  // bail if points aren't rendered
+  if (!points.initialized) return;
   // bail if the user requested the item we're already showing
   if (index === this.displayed) return;
   this.displayed = index;
@@ -746,7 +742,7 @@ Tooltip.prototype.display = function(index) {
   this.worldCoords = screenToWorldCoords(mouse);
   this.setPosition();
   // get the html to display
-  this.target.innerHTML = this.getTooltipHTML(index)
+  this.target.innerHTML = await this.getTooltipHTML(index)
 }
 
 Tooltip.prototype.setPosition = function() {
@@ -763,13 +759,14 @@ Tooltip.prototype.close = function() {
   }
 }
 
-Tooltip.prototype.getTooltipHTML = function(index) {
-  return points.objects && points.objects[index]
-    ? _.template(document.querySelector('#tooltip-template').innerHTML)({
-        index: index,
-        data: points.objects[index],
-      })
-    : null
+Tooltip.prototype.getTooltipHTML = async function(index) {
+  var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
+  return _.template(document.querySelector('#tooltip-template').innerHTML)({
+    index: index,
+    label: data.label,
+    image: data.filename,
+    data: data,
+  })
 }
 
 Tooltip.prototype.addEventListeners = function() {
