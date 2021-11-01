@@ -978,7 +978,7 @@ Preview.prototype.setHovered = async function(id) {
     } else {
       // otherwise show this cell
       var elem = await this.getPreviewHTML(id, 'hovered');
-      if (!elem) return this.adjustStates();
+      if (!elem) return this.adjustSizes();
       elem.classList.add('hovered');
       elem.style.left = mouse.x + 'px';
       elem.style.top = mouse.y + 'px';
@@ -986,12 +986,21 @@ Preview.prototype.setHovered = async function(id) {
       this.elems.hovered.appendChild(elem);
     }
     // shrink cells close to the mouse
-    this.adjustStates();
+    this.adjustSizes();
   }
 }
 
-// adjust the size of previews near the hovered elem
-Preview.prototype.adjustStates = function() {
+// if there is a hovered preview, adjust sizes near cursor else enlarge
+Preview.prototype.adjustSizes = function() {
+  if (this.hovered && this.hovered > -1) {
+    this.shrinkNearCursor();
+  } else {
+    this.enlargeAll();
+  }
+}
+
+// make previews close to cursor small, those far from cursor large
+Preview.prototype.shrinkNearCursor = function() {
   var cursor = Object.assign({}, mouse, {
     index: -1,
     elem: this.elems.cursor,
@@ -1005,6 +1014,13 @@ Preview.prototype.adjustStates = function() {
     )
       ? this.shrink(this.selected[i].index)
       : this.enlarge(this.selected[i].index);
+  }
+}
+
+// enlarge all previews
+Preview.prototype.enlargeAll = function() {
+  for (var i=0; i<this.selected.length; i++) {
+    this.enlarge(this.selected[i].index);
   }
 }
 
