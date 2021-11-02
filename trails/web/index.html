@@ -25,6 +25,7 @@
         <% var previewClass = 'preview ' %>
         <% if (image) previewClass += 'has-image ' %>
         <% if (label) previewClass += 'has-label ' %>
+
         <% getLocalPath = function(value) { %>
           <% return value ? value.split(/[\\/]/).pop() : ''; %>
         <% } %>
@@ -37,7 +38,11 @@
                      width:  <%- size %>;'></div>
           <% } %>
           <% if (label) { %>
-            <div class='preview-label paper-texture glow'><%= label %></div>
+            <div class='preview-label paper-texture glow'>
+              <div class='preview-label-text'>
+                <%= label %>
+              </div>
+            </div>
           <% } %>
         </div>
       </script>

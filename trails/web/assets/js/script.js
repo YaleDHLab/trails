@@ -811,6 +811,7 @@ Preview.prototype.createIndex = function(positions) {
 // select the set of this.n previews to show
 Preview.prototype.select = async function() {
   var bounds = getWorldBounds();
+  // sort the cell indices on screen to respect user-provided sort order
   var indices = this.kdbush.range(bounds.x[0], bounds.y[0], bounds.x[1], bounds.y[1]).sort(function(a, b) {
     return a-b;
   });
@@ -958,40 +959,67 @@ Preview.prototype.redraw = function() {
 Preview.prototype.setHovered = async function(id) {
   // prevent consecutive hovering selections
   clearTimeout(this.mouseTimeout);
-  // bail if we're being asked to show the cell we're already showing
+  // only proceed if the hovered cell !== the previously hovered cell
   if (id !== this.hovered) {
     // clear the old hovered state
     var previous = document.querySelector('#preview-' + this.hovered);
     if (previous) previous.classList.remove('hovered');
     // set the hovered id
     this.hovered = id;
-    // if the id is -1 clear the hovered cell
+    // in case of a null selection clear the hovered item
     if (id === -1) {
       this.elems.hovered.innerHTML = '';
-    // if this point is already previewed, update the element
-    } else if (this.selected.map(function(i) {return i.index}).indexOf(id) > -1) {
-      // set mouse offscreen to prevent touchtexture focus on point border
-      mouse.set({x: -1000, y: -1000});
-      document.querySelector('#preview-' + id).classList.add('hovered');
-      this.elems.hovered.innerHTML = '';
-    // if the point is not already previewed, create it
+      // else handle the case of valid selection
     } else {
-      // otherwise show this cell
-      var elem = await this.getPreviewHTML(id, 'hovered');
-      if (!elem) return this.adjustStates();
-      elem.classList.add('hovered');
-      elem.style.left = mouse.x + 'px';
-      elem.style.top = mouse.y + 'px';
-      this.elems.hovered.innerHTML = '';
-      this.elems.hovered.appendChild(elem);
+      // find points near the hovered point
+      var [x, y] = points.positions[id];
+      var r = 0.05;
+      var nearby = this.kdbush.range(x-r, y-r, x+r, y+r);
+      // if this point is one of the selected previews, update the element
+      if (this.selected.map(function(i) {return i.index}).indexOf(id) > -1) {
+        // set mouse offscreen to prevent touchtexture focus on point border
+        mouse.set({x: -1000, y: -1000});
+        document.querySelector('#preview-' + id).classList.add('hovered');
+        this.elems.hovered.innerHTML = '';
+      // if the point is not already previewed, create it
+      } else {
+        // otherwise show this cell
+        var elem = await this.getPreviewHTML(id, 'hovered');
+        if (!elem) return this.adjustSizes();
+        elem.classList.add('hovered');
+        elem.style.left = mouse.x + 'px';
+        elem.style.top = mouse.y + 'px';
+        this.elems.hovered.innerHTML = '';
+        this.elems.hovered.appendChild(elem);
+      }
     }
-    // shrink cells close to the mouse
-    this.adjustStates();
+    // adjust the cell sizes given the hover selection
+    this.adjustSizes();
   }
 }
 
-// adjust the size of previews near the hovered elem
-Preview.prototype.adjustStates = function() {
+// if there is a hovered preview, adjust sizes near cursor else enlarge
+Preview.prototype.adjustSizes = function() {
+  if (this.hovered && this.hovered > -1) {
+    this.shrinkAllButHovered();
+  } else {
+    this.enlargeAll();
+  }
+}
+
+// shrink all previews except the hovered one
+Preview.prototype.shrinkAllButHovered = function() {
+  for (var i=0; i<this.selected.length; i++) {
+    if (this.selected[i].index === this.hovered) {
+      this.enlarge(this.selected[i].index);
+    } else {
+      this.shrink(this.selected[i].index);
+    }
+  }
+}
+
+// make previews close to cursor small, those far from cursor large
+Preview.prototype.shrinkNearCursor = function() {
   var cursor = Object.assign({}, mouse, {
     index: -1,
     elem: this.elems.cursor,
@@ -1005,6 +1033,13 @@ Preview.prototype.adjustStates = function() {
     )
       ? this.shrink(this.selected[i].index)
       : this.enlarge(this.selected[i].index);
+  }
+}
+
+// enlarge all previews
+Preview.prototype.enlargeAll = function() {
+  for (var i=0; i<this.selected.length; i++) {
+    this.enlarge(this.selected[i].index);
   }
 }
 
@@ -1050,7 +1085,7 @@ Preview.prototype.handleMouseUp = function(e) {
   } else {
     this.mouseTimeout = setTimeout(function() {
       this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
-    }.bind(this), 300)
+    }.bind(this), 50)
   }
 }
 

@@ -163,7 +163,7 @@ body.night-mode .preview.hovered .preview-image {
 .preview-label {
   position: absolute;
   padding: 2px 5px;
-  font-size: 11px;
+  font-size: 10px;
   font-family: 'Noto Sans Display', sans-serif;
   text-transform: uppercase;
   animation: swing-z 1.5s forwards;
@@ -180,6 +180,12 @@ body.night-mode .preview.hovered .preview-image {
   display: inline-block;
 }
 
+.preview-label .preview-label-text {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /**
  * Keyframes
  **/
@@ -189,7 +195,7 @@ body.night-mode .preview.hovered .preview-image {
     transform: translate(-50%, -50%) scale(1);
   }
   100% {
-    transform: translate(-50%, -50%) scale(0.5);
+    transform: translate(-50%, -50%) scale(0.4);
   }
 }
 
