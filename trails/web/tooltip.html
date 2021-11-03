@@ -1,0 +1,30 @@
+<!-- TOOLTIP_TEMPLATE -->
+<script type='x-html/x-template' id='tooltip-template'>
+  <div class="tooltip row align-center">
+    <% if (data.image) { %>
+      <div class="tooltip-image" style='background-image:url("data/originals/<%- getLocalPath(data.image) %>")'></div>
+    <% } %>
+    <div class="col">
+      <div class="tooltip-label row">
+        <div class='label-word'><%= (data.label || '') %></div>
+        <div class='pos'><%= data.pos %></div>
+      </div>
+      <div class='tooltip-text'>
+        <% _.forEach(data.text, function(t) { %>
+          <div class='definition'><%= t %></div>
+        <% }) %>
+        <% _.forEach(data.examples, function(t) { %>
+          <% if (t.quote.trim()) { %>
+            <div class='example col'>
+              <div class='example-text'>"<%= t.quote.trim() %>"</div>
+              <div class='attribution row'>
+                <div class='example-author'><%= t.author %></div>
+                <div class='example-title'><%= t.title %></div>
+              </div>
+            </div>
+          <% } %>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+</script>

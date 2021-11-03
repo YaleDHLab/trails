@@ -1,0 +1,24 @@
+<!-- PREVIEW_TEMPLATE -->
+<script type='x-html/x-template' id='preview-template'>
+  <% var previewClass = 'preview ' %>
+  <% if (data.image) previewClass += 'has-image ' %>
+  <% if (data.label) previewClass += 'has-label ' %>
+
+  <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
+    <% if (data.image) { %>
+      <div class='preview-image-container'>
+        <div class='preview-image'
+          style='background-image: url("data/thumbs/<%- data.image %>");
+                 height: <%- size %>;
+                 width:  <%- size %>;'></div>
+      </div>
+    <% } %>
+    <% if (data.label) { %>
+      <div class='preview-label-container'>
+        <div class='preview-label'>
+          <%= data.label %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</script>
