@@ -32,14 +32,16 @@
 
         <div class='<%- previewClass %>' style='animation-delay:<%- Math.random() %>s;'>
           <% if (image) { %>
-            <div class='preview-image paper-texture glow'
-              style='background-image: url("data/thumbs/<%- getLocalPath(image) %>");
-                     height: <%- size %>;
-                     width:  <%- size %>;'></div>
+            <div class='preview-image-container paper-texture'>
+              <div class='preview-image paper-texture glow'
+                style='background-image: url("data/thumbs/<%- getLocalPath(image) %>");
+                       height: <%- size %>;
+                       width:  <%- size %>;'></div>
+            </div>
           <% } %>
           <% if (label) { %>
-            <div class='preview-label paper-texture glow'>
-              <div class='preview-label-text'>
+            <div class='preview-label-container paper-texture glow'>
+              <div class='preview-label'>
                 <%= label %>
               </div>
             </div>
@@ -103,7 +105,7 @@
       <script src='assets/js/unreal-bloom.js'></script>
       <script src='assets/js/lodash.min.js'></script>
       <script src='assets/js/kdbush.min.js'></script>
-      <script src='assets/js/script.js'></script>
+      <script src='assets/js/trails.js'></script>
       <script type="application/ld+json">
       {
         "@context": "https://schema.org",

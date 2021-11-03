@@ -134,13 +134,17 @@ body.night-mode .preview.hovered {
   animation: increase-scale 0.3s forwards;
 }
 
+.preview-image-container {
+  border-radius: 100%;
+  background-image: url(images/paper.png);
+}
+
 .preview-image {
   background-image: none;
   background-size: cover;
   background-position: center top;
   border-radius: 100%;
   opacity: 1;
-  overflow: hidden;
 }
 
 .preview.hovered .preview-image {
@@ -151,16 +155,18 @@ body.night-mode .preview.hovered .preview-image {
   animation: pulse-light 2s infinite;
 }
 
+.preview-image-container::after,
 .preview-image.paper-texture::after {
   border-radius: 100%;
+  overflow: hidden;
 }
 
-.preview-label,
+.preview-label-container,
 .tooltip {
   background-color: #f5f1ed;
 }
 
-.preview-label {
+.preview-label-container {
   position: absolute;
   padding: 2px 5px;
   font-size: 10px;
@@ -172,15 +178,15 @@ body.night-mode .preview.hovered .preview-image {
   color: #362d23;
 }
 
-.preview.has-image .preview-label {
+.preview.has-image .preview-label-container {
   bottom: -27px;
 }
 
-.preview.hovered .preview-label {
+.preview.hovered .preview-label-container {
   display: inline-block;
 }
 
-.preview-label .preview-label-text {
+.preview-label {
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;

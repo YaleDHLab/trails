@@ -908,7 +908,7 @@ Preview.prototype.getElementSize = function(d) {
 
 Preview.prototype.getPreviewHTML = async function(index) {
   if (!points.initialized) return;
-  // get html string
+  // get HTML string
   var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
   var html = _.template(document.querySelector('#preview-template').innerHTML)({
     index: index,
@@ -1000,8 +1000,8 @@ Preview.prototype.setHovered = async function(id) {
 
 // if there is a hovered preview, adjust sizes near cursor else enlarge
 Preview.prototype.adjustSizes = function() {
-  if (this.hovered && this.hovered > -1) {
-    this.shrinkAllButHovered();
+  if (this.hovered > -1) {
+    this.shrinkNearCursor();
   } else {
     this.enlargeAll();
   }
@@ -1054,14 +1054,16 @@ Preview.prototype.shrink = function(id) {
 // increase the size of a preview given the cell id
 Preview.prototype.enlarge = function(id) {
   var elem = document.querySelector('#preview-' + id);
-  elem.classList.remove('small');
-  // add / remove the pulse class
-  if (this.hovered === id) {
-    elem.classList.add('pulse');
-    elem.classList.add('show-label');
-  } else {
-    elem.classList.remove('pulse');
-    elem.classList.remove('show-label');
+  if (elem) {
+    elem.classList.remove('small');
+    // add / remove the pulse class
+    if (this.hovered === id) {
+      elem.classList.add('pulse');
+      elem.classList.add('show-label');
+    } else {
+      elem.classList.remove('pulse');
+      elem.classList.remove('show-label');
+    }
   }
 }
 
@@ -1078,14 +1080,16 @@ Preview.prototype.handleMouseUp = function(e) {
   // if the user has dragged too far clear
   if (mouse.dragging) {
     if (world.renderer.domElement.contains(e.target)) {
+      clearTimeout(this.timeout);
       this.timeout = setTimeout(function() {
         this.redraw();
       }.bind(this), 250)
     }
   } else {
+    clearTimeout(this.mouseTimeout);
     this.mouseTimeout = setTimeout(function() {
       this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
-    }.bind(this), 50)
+    }.bind(this), 300)
   }
 }
 
@@ -1104,7 +1108,7 @@ Preview.prototype.handleMouseMove = function(e) {
   // else check if we're hovering a cell
   } else {
     // once the mouse stops moving, find the hovered point (if any)
-    window.clearTimeout(this.mouseTimeout);
+    clearTimeout(this.mouseTimeout);
     this.mouseTimeout = setTimeout(function() {
       this.setHovered(picker.select({x: mouse.x, y: mouse.y}));
     }.bind(this), 100)
@@ -1113,7 +1117,7 @@ Preview.prototype.handleMouseMove = function(e) {
 
 Preview.prototype.handleWheel = function() {
   this.clear();
-  if (this.timeout) clearTimeout(this.timeout);
+  clearTimeout(this.timeout);
   this.timeout = setTimeout(function() {
     this.redraw();
   }.bind(this), 700)
@@ -1121,7 +1125,7 @@ Preview.prototype.handleWheel = function() {
 
 Preview.prototype.handleResize = function() {
   this.clear();
-  if (this.timeout) clearTimeout(this.timeout);
+  clearTimeout(this.timeout);
   this.timeout = setTimeout(function() {
     this.redraw();
   }.bind(this), 200)
