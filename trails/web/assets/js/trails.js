@@ -781,6 +781,7 @@ Tooltip.prototype.close = function() {
 
 Tooltip.prototype.getTooltipHTML = async function(index) {
   var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
+  if (data.image) data.image = getLocalPath(data.image);
   return _.template(this.template)({
     index: index,
     data: data,
@@ -937,6 +938,7 @@ Preview.prototype.getPreviewHTML = async function(index) {
   if (!points.initialized) return;
   // get HTML string
   var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
+  if (data.image) data.image = getLocalPath(data.image);
   var html = _.template(this.template)({
     index: index,
     data: data,
@@ -1759,6 +1761,10 @@ function gunzip(data) {
     asciistring += String.fromCharCode(plain[i]);
   }
   return asciistring;
+}
+
+function getLocalPath(s) {
+  return s.split(/[\\/]/).pop();
 }
 
 /**
