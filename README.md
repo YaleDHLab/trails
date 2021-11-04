@@ -68,6 +68,22 @@ If you have metadata associated with your objects (e.g. you have a collection of
 trails --inputs "images/*.jpg" --metadata "image_metadata.json"
 ```
 
+**Fast Iteration**
+
+To iterate quickly, use the `--limit` flag to only process a small subset of your collection:
+
+```bash
+trails --inputs "images/*.jpg" --limit 100
+```
+
+**Multiple Plots**
+
+If you want to create multiple plots in the same directory, use the `--output_folder` flag to specify the directory in which the current outputs will be written
+
+```bash
+trails --inputs "images/*.jpg" --output_folder "catplot"
+```
+
 # How It Works
 
 Trails uses three pieces of data to create interactive displays:
