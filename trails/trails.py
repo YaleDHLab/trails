@@ -378,7 +378,11 @@ def get_image_colors(args):
   if os.path.exists(cache_path + '.npy'):
     color = np.load(cache_path + '.npy')
   else:
-    color = ColorThief(obj['path']).get_color(quality=quality)
+    try:
+      color = ColorThief(obj['path']).get_color(quality=quality)
+    except:
+      print(' * Could not extract color for', obj['path'])
+      color = [255,255,255]
     np.save(cache_path + '.npy', color)
   return [idx, color]
 
