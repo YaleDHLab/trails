@@ -69,6 +69,7 @@ def parse():
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
   parser.add_argument('--xml_base_tag', type=str, default=config['xml_base_tag'], help='the XML tag that contains text to parse', required=False)
   parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='CSV or JSON metadata for objects (joined on filename)', required=False)
+  parser.add_argument('--output_folder', '-o', type=str, default=config['output_folder'], help='folder in which outputs will be written', required=False)
   config.update(vars(parser.parse_args()))
   validate_config(**config)
   process(**config)
@@ -97,7 +98,7 @@ def process(**kwargs):
   kwargs['vectorize'] = get_vectorize_strategy(**kwargs)
   # get a list of vectors, one per datum to be represented
   print(' * collecting vectors using {} data'.format(kwargs['vectorize']))
-  kwargs['vectors'] = get_vectors(**kwargs)
+  kwargs['objects'], kwargs['vectors'] = get_vectors(**kwargs)
   # project the vectors to 2D
   print(' * collecting positions')
   kwargs['positions'] = get_positions(**kwargs)
@@ -289,39 +290,52 @@ class Plaintext(dict):
 ##
 
 def get_vectorize_strategy(**kwargs):
-  if kwargs.get('vectorize') != 'auto': return kwargs['vectorize']
-  if all([i.get(kwargs.get('vector', '')) for i in kwargs['objects']]): return 'vector'
-  if all([isinstance(i, Image) for i in kwargs['objects']]): return 'image'
+  if kwargs.get('vectorize') != 'auto':
+    return kwargs['vectorize']
+  elif len([isinstance(i, Image) for i in kwargs['objects']]) >= 0.5 * len(kwargs['objects']):
+    return 'image'
+  elif len([i.get(kwargs.get('vector', '')) for i in kwargs['objects']])  >= 0.5 * len(kwargs['objects']):
+    return 'vector'
   return 'text'
 
 def get_vectors(**kwargs):
-  if kwargs['vectorize'] == 'image':
-    base = InceptionV3(include_top=True, weights='imagenet',)
-    model = Model(inputs=base.input, outputs=base.get_layer('avg_pool').output)
-    vecs = []
+  vecs = []
+  objects = []
+  if kwargs['vectorize'] == 'vector':
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
         # object has vector
         if i.get(kwargs.get('vector', '')):
           vecs.append(i[kwargs['vector']])
+          objects.append(i)
           progress_bar.update(1)
           continue
-        # object does not have vector yet, check cache, then create afresh if needed
-        cache_path = os.path.join('cache', 'image-vectors', i['path'].replace('/', '-'))
-        if os.path.exists(cache_path + '.npy'):
-          vecs.append(np.load(cache_path + '.npy'))
-          progress_bar.update(1)
-          continue
+    return [objects, vecs]
+  elif kwargs['vectorize'] == 'image':
+    base = InceptionV3(include_top=True, weights='imagenet',)
+    model = Model(inputs=base.input, outputs=base.get_layer('avg_pool').output)
+    with tqdm(total=len(kwargs['objects'])) as progress_bar:
+      for i in kwargs['objects']:
+        vec = None
         try:
-          # this next line uses the __missing__ handler to lazily load the image into RAM
-          im = preprocess_input( img_to_array( i['__load_image__'].resize((299,299)) ) )
-          vec = model.predict(np.expand_dims(im, 0)).squeeze()
+          # read vector off object directly
+          vec = i.get(kwargs.get('vector', ''))
+          # else check cache
+          cache_path = os.path.join('cache', 'image-vectors', i['path'].replace('/', '-'))
+          if vec is None and os.path.exists(cache_path + '.npy'):
+            vec = np.load(cache_path + '.npy')
+          # else create vector
+          if vec is None:
+            im = preprocess_input( img_to_array( i['__load_image__'].resize((299,299)) ) )
+            vec = model.predict(np.expand_dims(im, 0)).squeeze()
+            np.save(cache_path, vec)
+          # add the vector and the object to the list of items to return
           vecs.append(vec)
+          objects.append(i)
           progress_bar.update(1)
-          np.save(cache_path, vec)
         except Exception as exc:
-          print('WARNING: Image', i, 'could not be vectorized')
-    return vecs
+          print('WARNING: Image', i, 'could not be vectorized', exc)
+    return [objects, vecs]
   elif kwargs['vectorize'] == 'text':
     text = []
     for i in kwargs['objects']:
@@ -331,7 +345,8 @@ def get_vectors(**kwargs):
       text.append(t.lower())
     vectorizer = TfidfVectorizer()
     X = vectorizer.fit_transform(text)
-    return NMF(n_components=min(len(text), 100), max_iter=kwargs['max_iter'], verbose=1, init='nndsvd').fit_transform(X)
+    vecs = NMF(n_components=min(len(text), 100), max_iter=kwargs['max_iter'], verbose=1, init='nndsvd').fit_transform(X)
+    return [kwargs['objects'], vecs]
 
 ##
 # UMAP
