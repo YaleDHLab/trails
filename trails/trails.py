@@ -31,8 +31,6 @@ import os
 TODO:
   Add --filter flag to remove objects without text/image properties
   Add --template arg that selects from available templates (text, image, text+image)
-  Add --vectors flag with one vector per object
-  Set the vectorize argument to image if all inputs are images
   Write config.json with kwargs for ui conditionalization
   Multiprocess image color extraction
 '''
@@ -41,6 +39,7 @@ config = {
   'inputs': None,
   'text': None,
   'label': None,
+  'vector': None,
   'limit': None,
   'sort': None,
   'metadata': None,
@@ -61,7 +60,8 @@ def parse():
   parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--inputs', '-i', type=str, default=config['inputs'], help='path to a glob of files to process', required=True)
   parser.add_argument('--text', type=str, default=config['text'], help='attribute or field that contains body text', required=False)
-  parser.add_argument('--label', type=str, default=config['text'], help='attribute or field that contains label text', required=False)
+  parser.add_argument('--label', type=str, default=config['label'], help='attribute or field that contains label text', required=False)
+  parser.add_argument('--vector', type=list, default=config['vector'], help='attribute or field that contains object vector', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
   parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing documents', required=False)
@@ -94,7 +94,7 @@ def process(**kwargs):
   kwargs['objects'] = get_objects(**kwargs)
   # determine the vectorization type
   print(' * determining field to vectorize')
-  kwargs['vectorize'] = get_vectorize(**kwargs)
+  kwargs['vectorize'] = get_vectorize_strategy(**kwargs)
   # get a list of vectors, one per datum to be represented
   print(' * collecting vectors using {} data'.format(kwargs['vectorize']))
   kwargs['vectors'] = get_vectors(**kwargs)
@@ -288,8 +288,9 @@ class Plaintext(dict):
 # Vectorize Objects
 ##
 
-def get_vectorize(**kwargs):
+def get_vectorize_strategy(**kwargs):
   if kwargs.get('vectorize'): return kwargs['vectorize']
+  if all([i.get(kwargs.get('vector', '')) for i in kwargs['objects']]): return 'vector'
   if all([isinstance(i, Image) for i in kwargs['objects']]): return 'image'
   return 'text'
 
@@ -300,6 +301,12 @@ def get_vectors(**kwargs):
     vecs = []
     with tqdm(total=len(kwargs['objects'])) as progress_bar:
       for i in kwargs['objects']:
+        # object has vector
+        if i.get(kwargs.get('vector', '')):
+          vecs.append(i[kwargs['vector']])
+          progress_bar.update(1)
+          continue
+        # object does not have vector yet, check cache, then create afresh if needed
         cache_path = os.path.join('cache', 'image-vectors', i['path'].replace('/', '-'))
         if os.path.exists(cache_path + '.npy'):
           vecs.append(np.load(cache_path + '.npy'))
@@ -316,7 +323,12 @@ def get_vectors(**kwargs):
           print('WARNING: Image', i, 'could not be vectorized')
     return vecs
   elif kwargs['vectorize'] == 'text':
-    text = [i['text'] for i in kwargs['objects']]
+    text = []
+    for i in kwargs['objects']:
+      t = i['text']
+      if isinstance(t, list):
+        t = ' '.join(t)
+      text.append(t.lower())
     vectorizer = TfidfVectorizer()
     X = vectorizer.fit_transform(text)
     return NMF(n_components=min(len(text), 100), max_iter=kwargs['max_iter'], verbose=1, init='nndsvd').fit_transform(X)

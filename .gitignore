@@ -15,5 +15,7 @@ build
 dist
 cache
 datasets
-trails/trails/web/assets/data
+trails/web/data
+trails/web/custom.css
 deploy*
+update*
