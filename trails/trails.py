@@ -45,7 +45,7 @@ config = {
   'metadata': None,
   'n_neighbors': 5,
   'min_dist': 0.1,
-  'vectorize': None,
+  'vectorize': 'auto',
   'output_folder': 'output',
   'color_quality': 10,
   'max_iter': 50,
@@ -59,23 +59,23 @@ def parse():
   description = 'Create the data required to create a Trails viewer'
   parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--inputs', '-i', type=str, default=config['inputs'], help='path to a glob of files to process', required=True)
-  parser.add_argument('--text', type=str, default=config['text'], help='attribute or field that contains body text', required=False)
-  parser.add_argument('--label', type=str, default=config['label'], help='attribute or field that contains label text', required=False)
+  parser.add_argument('--text', type=str, default=config['text'], help='attribute or field that contains "body" text', required=False)
+  parser.add_argument('--label', type=str, default=config['label'], help='attribute or field that contains "label" text', required=False)
   parser.add_argument('--vector', type=list, default=config['vector'], help='attribute or field that contains object vector', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
-  parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing documents', required=False)
-  parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations', required=False)
+  parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing text files', required=False)
+  parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations when vectorizing text', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
   parser.add_argument('--xml_base_tag', type=str, default=config['xml_base_tag'], help='the XML tag that contains text to parse', required=False)
-  parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='metadata JSON for image inputs', required=False)
+  parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='CSV or JSON metadata for objects (joined on filename)', required=False)
   config.update(vars(parser.parse_args()))
   validate_config(**config)
   process(**config)
 
 def validate_config(**kwargs):
   # check vectorization strategy
-  assert kwargs.get('vectorize') in ['text', 'image', None]
+  assert kwargs.get('vectorize') in ['text', 'image', 'auto']
   # check metadata
   metadata_mimetype = None if not kwargs['metadata'] else get_mimetype(kwargs['metadata'])
   if metadata_mimetype: assert metadata_mimetype in ['application/json', 'text/csv']
@@ -289,7 +289,7 @@ class Plaintext(dict):
 ##
 
 def get_vectorize_strategy(**kwargs):
-  if kwargs.get('vectorize'): return kwargs['vectorize']
+  if kwargs.get('vectorize') != 'auto': return kwargs['vectorize']
   if all([i.get(kwargs.get('vector', '')) for i in kwargs['objects']]): return 'vector'
   if all([isinstance(i, Image) for i in kwargs['objects']]): return 'image'
   return 'text'

@@ -204,19 +204,19 @@ body.night-mode .preview.hovered .preview-image {
 
 @keyframes decrease-scale {
   0% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   100% {
-    transform: scale(0.4);
+    transform: translate(-50%, -50%) scale(0.4);
   }
 }
 
 @keyframes increase-scale {
   0% {
-    transform: scale(0.1);
+    transform: translate(-50%, -50%) scale(0.1);
   }
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
