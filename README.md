@@ -68,9 +68,9 @@ If each object in your collection already has a 2D position, just add an x colum
 trails --input "birdsong.json" -x "longitude" -y "latitude"
 ```
 
-**Adding Metadata**
+**Custom Metadata**
 
-If you have metadata associated with your objects (e.g. you have a collection of text files _and_ a JSON file with associated metadata), make sure your metadata has `filename` as its first column (in case of CSV metadata) or has `filename` as an attribute (in case of JSON metadata). Then you can provide your metadata to the data pipeline as follows:
+If you have metadata associated with your objects (e.g. you have a collection of text files _and_ a CSV or JSON file with associated metadata), make sure your metadata has `filename` as its first column (in case of CSV metadata) or has `filename` as an attribute (in case of JSON metadata). Then you can provide your metadata to the data pipeline as follows:
 
 ```bash
 trails --inputs "images/*.jpg" --metadata "image_metadata.json"
