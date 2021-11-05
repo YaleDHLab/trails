@@ -28,7 +28,7 @@ trails --input "wiki-people.json" --label "name" --text "abstract"
 
 Trails can process text files, image files, JSON files, or other filetypes that have already been vectorized.
 
-**Text**
+**Text Inputs**
 
 To process a text collection with Trails, provide the paths to your text files:
 
@@ -36,7 +36,7 @@ To process a text collection with Trails, provide the paths to your text files:
 trails --inputs "texts/*.txt"
 ```
 
-**Image**
+**Image Inputs**
 
 To process an image collection with Trails, provide the paths to your image files:
 
@@ -44,7 +44,7 @@ To process an image collection with Trails, provide the paths to your image file
 trails --inputs "images/*.jpg"
 ```
 
-**JSON**
+**JSON Inputs**
 
 To process a collection of JSON files with Trails, provide the path to your JSON file(s), then indicate the fields that should be used for each item's `label` and `text` fields:
 
@@ -76,7 +76,7 @@ If you have metadata associated with your objects (e.g. you have a collection of
 trails --inputs "images/*.jpg" --metadata "image_metadata.json"
 ```
 
-**Fast Iteration**
+**Iterating Quickly**
 
 To iterate quickly, use the `--limit` flag to only process a small subset of your collection:
 
