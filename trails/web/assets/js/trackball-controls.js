@@ -633,7 +633,7 @@
       function onMouseWheel( event ) {
         if ( scope.enabled === false ) return;
         if ( scope.noZoom === true ) return;
-        event.preventDefault();
+        //event.preventDefault();
 
         switch ( event.deltaMode ) {
 
