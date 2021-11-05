@@ -46,7 +46,7 @@ trails --inputs "images/*.jpg"
 
 **JSON**
 
-To process a collection of JSON files with Trails, provide the path to your JSON file(s), then indicate the fields that should be used for each item's label and text fields:
+To process a collection of JSON files with Trails, provide the path to your JSON file(s), then indicate the fields that should be used for each item's `label` and `text` fields:
 
 ```bash
 trails --input "wiki-people.json" --label "name" --text "abstract"
@@ -57,7 +57,15 @@ trails --input "wiki-people.json" --label "name" --text "abstract"
 If each object in your collection already has been vectorized, format your inputs as JSON, include the vectors in those JSON files, and specify the field that contains the vector when evoking Trails:
 
 ```bash
-trails --input "birdsong.json" --label "species" --text "field_notes" --vector "vec"
+trails --input "birdsong.json" --vector "vec"
+```
+
+**Custom Positions**
+
+If each object in your collection already has a 2D position, just add an x column and a y column to your metadata and specify those columns when evoking Trails:
+
+```bash
+trails --input "birdsong.json" -x "longitude" -y "latitude"
 ```
 
 **Adding Metadata**
