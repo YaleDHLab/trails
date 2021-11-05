@@ -1016,8 +1016,7 @@ Preview.prototype.setHovered = async function(id) {
         elem.classList.add('hovered');
         elem.style.left = mouse.x + 'px';
         elem.style.top = mouse.y + 'px';
-        this.elems.hovered.innerHTML = '';
-        this.elems.hovered.appendChild(elem);
+        this.elems.hovered.innerHTML = elem.outerHTML;
       }
     }
     // adjust the cell sizes given the hover selection
