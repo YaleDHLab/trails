@@ -41,8 +41,10 @@ config = {
   'label': None,
   'vector': None,
   'limit': None,
-  'sort': None,
   'metadata': None,
+  'sort': None,
+  'x': None,
+  'y': None,
   'n_neighbors': 5,
   'min_dist': 0.1,
   'vectorize': 'auto',
@@ -63,12 +65,14 @@ def parse():
   parser.add_argument('--label', type=str, default=config['label'], help='attribute or field that contains "label" text', required=False)
   parser.add_argument('--vector', type=list, default=config['vector'], help='attribute or field that contains object vector', required=False)
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
-  parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the field to use when sorting objects', required=False)
+  parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='CSV or JSON metadata for objects (joined on filename)', required=False)
+  parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the metadata field to use when sorting objects', required=False)
+  parser.add_argument('--position_x', '-x', type=str, default=config['x'], help='the metadata field that designates the x position to use for points (also requires --position_y)', required=False)
+  parser.add_argument('--position_y', '-y', type=str, default=config['y'], help='the metadata field that designates the y position to use for points (also requires --position_x)', required=False)
   parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing text files', required=False)
   parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations when vectorizing text', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
   parser.add_argument('--xml_base_tag', type=str, default=config['xml_base_tag'], help='the XML tag that contains text to parse', required=False)
-  parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='CSV or JSON metadata for objects (joined on filename)', required=False)
   parser.add_argument('--output_folder', '-o', type=str, default=config['output_folder'], help='folder in which outputs will be written', required=False)
   config.update(vars(parser.parse_args()))
   validate_config(**config)
@@ -82,6 +86,9 @@ def validate_config(**kwargs):
   if metadata_mimetype: assert metadata_mimetype in ['application/json', 'text/csv']
   # check color_quality
   assert isinstance(kwargs['color_quality'], int) and kwargs['color_quality'] >= 1
+  # check both position_x and position_y are present if either is present
+  if kwargs.get('position_x'): assert kwargs.get('position_y')
+  if kwargs.get('position_y'): assert kwargs.get('position_x')
 
 def process(**kwargs):
   # create output directories
@@ -219,6 +226,17 @@ def get_objects(**kwargs):
   if kwargs.get('sort'):
     default = '' if isinstance(kwargs['sort'], str) else 0
     objects = sorted(objects, key=lambda i: i.get(kwargs['sort'], default), reverse=True)
+  # optionally add position data if the user provided it
+  if kwargs.get('position_x') and kwargs.get('position_y'):
+    filtered = []
+    for i in objects:
+      if i.get(kwargs['position_x']) and i.get(kwargs['position_y']):
+        i['position'] = [
+          float(i[kwargs['position_x']]),
+          float(i[kwargs['position_y']]),
+        ]
+        filtered.append(i)
+    objects = filtered
   # optionally limit the number of objects
   if kwargs.get('limit'):
     objects = objects[:kwargs['limit']]
@@ -290,15 +308,20 @@ class Plaintext(dict):
 ##
 
 def get_vectorize_strategy(**kwargs):
+  if kwargs.get('position_x') and kwargs.get('position_y'):
+    return 'null'
   if kwargs.get('vectorize') != 'auto':
     return kwargs['vectorize']
-  elif len([isinstance(i, Image) for i in kwargs['objects']]) >= 0.5 * len(kwargs['objects']):
+  elif len([i for i in kwargs['objects'] if isinstance(i, Image)]) >= 0.5 * len(kwargs['objects']):
     return 'image'
   elif len([i.get(kwargs.get('vector', '')) for i in kwargs['objects']])  >= 0.5 * len(kwargs['objects']):
     return 'vector'
   return 'text'
 
 def get_vectors(**kwargs):
+  # if user provided both position_x and position_y, use positions as vectors
+  if kwargs.get('position_x') and kwargs.get('position_y'):
+    return [kwargs['objects'], [i['position'] for i in kwargs['objects']]]
   vecs = []
   objects = []
   if kwargs['vectorize'] == 'vector':
@@ -353,7 +376,12 @@ def get_vectors(**kwargs):
 ##
 
 def get_positions(**kwargs):
-  return minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
+  # if the user provided point positions, use them
+  if kwargs.get('position_x') and kwargs.get('position_y'):
+    return minmax_scale([i['position'] for i in kwargs.get('objects')], feature_range=(-1,1))
+  # else get vector positions
+  vectors = minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
+  return [kwargs['objects'], vectors]
 
 def run_umap(**kwargs):
   vecs = PCA(n_components=min(len(kwargs['vectors']), 50)).fit_transform(kwargs['vectors'])
@@ -367,6 +395,9 @@ def run_umap(**kwargs):
 ##
 
 def get_colors(**kwargs):
+  # if user provided custom positions, return null colors
+  if kwargs.get('position_x') and kwargs.get('position_y'):
+    return np.array([[255,255,255] for i in kwargs['objects']])
   # for text data, return 1D umap
   if kwargs['vectorize'] == 'text':
     return minmax_scale(run_umap(n_components=1, **kwargs))
@@ -422,8 +453,9 @@ def write_outputs(**kwargs):
   write_json(colors_path, round_floats(kwargs['colors'].squeeze(), digits=2), gzip=True)
   write_objects(**kwargs)
 
-def round_floats(a, digits=3):
+def round_floats(a, digits=4):
   '''Return 1D or 2D array a with rounded float precision'''
+  a = np.array(a)
   if len(a.shape) == 2: return [[round(float(j), digits) for j in i] for i in a]
   elif len(a.shape) == 1: return [round(float(j), digits) for j in a]
   return a
