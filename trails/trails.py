@@ -43,8 +43,8 @@ config = {
   'limit': None,
   'metadata': None,
   'sort': None,
-  'x': None,
-  'y': None,
+  'position_x': None,
+  'position_y': None,
   'n_neighbors': 5,
   'min_dist': 0.1,
   'vectorize': 'auto',
@@ -67,8 +67,8 @@ def parse():
   parser.add_argument('--limit', '-l', type=int, default=config['limit'], help='the maximum number of observations to analyze', required=False)
   parser.add_argument('--metadata', '-m', type=str, default=config['metadata'], help='CSV or JSON metadata for objects (joined on filename)', required=False)
   parser.add_argument('--sort', '-s', type=str, default=config['sort'], help='the metadata field to use when sorting objects', required=False)
-  parser.add_argument('--position_x', '-x', type=str, default=config['x'], help='the metadata field that designates the x position to use for points (also requires --position_y)', required=False)
-  parser.add_argument('--position_y', '-y', type=str, default=config['y'], help='the metadata field that designates the y position to use for points (also requires --position_x)', required=False)
+  parser.add_argument('--position_x', '-x', type=str, default=config['position_x'], help='the metadata field that designates the x position to use for points (also requires --position_y)', required=False)
+  parser.add_argument('--position_y', '-y', type=str, default=config['position_y'], help='the metadata field that designates the y position to use for points (also requires --position_x)', required=False)
   parser.add_argument('--encoding', type=str, default=config['encoding'], help='the encoding to use when parsing text files', required=False)
   parser.add_argument('--max_iter', '-mi', type=int, default=config['max_iter'], help='the max number of NMF iterations when vectorizing text', required=False)
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
@@ -380,8 +380,7 @@ def get_positions(**kwargs):
   if kwargs.get('position_x') and kwargs.get('position_y'):
     return minmax_scale([i['position'] for i in kwargs.get('objects')], feature_range=(-1,1))
   # else get vector positions
-  vectors = minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
-  return [kwargs['objects'], vectors]
+  return minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
 
 def run_umap(**kwargs):
   vecs = PCA(n_components=min(len(kwargs['vectors']), 50)).fit_transform(kwargs['vectors'])
@@ -455,7 +454,7 @@ def write_outputs(**kwargs):
 
 def round_floats(a, digits=4):
   '''Return 1D or 2D array a with rounded float precision'''
-  a = np.array(a)
+  if not isinstance(a, np.ndarray): a = np.array(a)
   if len(a.shape) == 2: return [[round(float(j), digits) for j in i] for i in a]
   elif len(a.shape) == 1: return [round(float(j), digits) for j in a]
   return a
