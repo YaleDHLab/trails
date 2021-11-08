@@ -378,9 +378,9 @@ def get_vectors(**kwargs):
 def get_positions(**kwargs):
   # if the user provided point positions, use them
   if kwargs.get('position_x') and kwargs.get('position_y'):
-    return minmax_scale([i['position'] for i in kwargs.get('objects')], feature_range=(-1,1))
+    return scale([i['position'] for i in kwargs['objects']])
   # else get vector positions
-  return minmax_scale(run_umap(n_components=2, **kwargs), feature_range=(-1,1))
+  return scale(run_umap(n_components=2, **kwargs))
 
 def run_umap(**kwargs):
   vecs = PCA(n_components=min(len(kwargs['vectors']), 50)).fit_transform(kwargs['vectors'])
@@ -439,6 +439,7 @@ def write_outputs(**kwargs):
   # copy web assets
   src = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'web')
   dest = os.path.join(os.getcwd(), kwargs['output_folder'])
+  print(' * copying web assets')
   copy_tree(src, dest)
   # copy media before mutating objects below
   copy_media(**kwargs)
@@ -448,9 +449,26 @@ def write_outputs(**kwargs):
   positions_path = os.path.join(kwargs['output_folder'], 'data', 'positions.json')
   colors_path = os.path.join(kwargs['output_folder'], 'data', 'colors.json')
   objects_path = os.path.join(kwargs['output_folder'], 'data', 'objects.json')
+  print(' * writing positions')
   write_json(positions_path, round_floats(kwargs['positions']), gzip=True)
+  print(' * writing colors')
   write_json(colors_path, round_floats(kwargs['colors'].squeeze(), digits=2), gzip=True)
+  print(' * writing objects')
   write_objects(**kwargs)
+
+def scale(a):
+  '''Scale a 2D numpy array while preserving proportions'''
+  if not isinstance(a, np.ndarray): a = np.array(a)
+  biggest = np.max(a)
+  smallest = np.min(a)
+  for i in range(2):
+    #smallest = np.min(a[:, i])
+    a[:, i] -= smallest
+    a[:, i] /= (biggest-smallest)
+  # scale -1 : 1
+  a -= 0.5
+  a *= 2
+  return a
 
 def round_floats(a, digits=4):
   '''Return 1D or 2D array a with rounded float precision'''
@@ -471,9 +489,11 @@ def write_json(path, obj, gzip=False):
 def write_objects(**kwargs):
   objects_dir = os.path.join(kwargs['output_folder'], 'data', 'objects')
   Path(objects_dir).mkdir(parents=True, exist_ok=True)
-  for idx, i in enumerate(kwargs['objects']):
-    path = os.path.join(objects_dir, '{}.json'.format(idx))
-    write_json(path, i, gzip=False)
+  with tqdm(total=len(kwargs['objects'])) as progress_bar:
+    for idx, i in enumerate(kwargs['objects']):
+      path = os.path.join(objects_dir, '{}.json'.format(idx))
+      write_json(path, i, gzip=False)
+      progress_bar.update(1)
 
 def copy_media(thumb_size=100, **kwargs):
   if kwargs['vectorize'] == 'image':
