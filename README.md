@@ -76,9 +76,9 @@ If you have metadata associated with your objects (e.g. you have a collection of
 trails --inputs "images/*.jpg" --metadata "image_metadata.json"
 ```
 
-**Iterating Quickly**
+**Limit Dataset Size**
 
-To iterate quickly, use the `--limit` flag to only process a small subset of your collection:
+To artificially limit the size of a dataset, use the `--limit` flag to only process a small subset of your collection:
 
 ```bash
 trails --inputs "images/*.jpg" --limit 100
