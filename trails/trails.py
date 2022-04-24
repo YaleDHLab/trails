@@ -74,9 +74,15 @@ def parse():
   parser.add_argument('--vectorize', '-v', type=str, default=config['vectorize'], help='whether to vectorize text or images', required=False)
   parser.add_argument('--xml_base_tag', type=str, default=config['xml_base_tag'], help='the XML tag that contains text to parse', required=False)
   parser.add_argument('--output_folder', '-o', type=str, default=config['output_folder'], help='folder in which outputs will be written', required=False)
-  config.update(vars(parser.parse_args()))
+  config.update(preprocess_config(**vars(parser.parse_args())))
   validate_config(**config)
   process(**config)
+
+def preprocess_config(**kwargs):
+  # perform inferences on configuration from initial parameters
+  if kwargs.get('vectorize') == 'auto' and kwargs.get('text'):
+    kwargs['vectorize'] = 'text'
+  return kwargs
 
 def validate_config(**kwargs):
   # check vectorization strategy
