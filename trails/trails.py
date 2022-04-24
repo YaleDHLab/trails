@@ -368,7 +368,7 @@ def get_vectors(**kwargs):
   elif kwargs['vectorize'] == 'text':
     text = []
     for i in kwargs['objects']:
-      t = i['text']
+      t = i.get('text', '')
       if isinstance(t, list):
         t = ' '.join(t)
       text.append(t.lower())
