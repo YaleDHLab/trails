@@ -39,7 +39,7 @@ setup(
     'opencv-python==4.5.3.56',
     'Pillow==8.3.2',
     'scikit-learn>=0.24.2',
-    'tensorflow>=2.6.0',
+    'tensorflow>=2.7.0',
     'tqdm==4.46.1',
     'umap-learn==0.5.1',
     'yale-dhlab-keras-preprocessing>=1.1.1',
