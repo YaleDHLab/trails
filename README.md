@@ -1,6 +1,6 @@
 # Trails
 
-> Trails builds interactive plots of massive datasets. You can use it to visualize large text, image, audio, video or other collections!
+> Trails builds interactive plots of massive datasets. You can use it to visualize large text, image, audio, video or other collections 💫
 
 ![App preview](/trails/web/assets/images/preview.png?raw=true)
 
@@ -14,13 +14,14 @@ pip install git+https://github.com/YaleDHLab/trails.git
 wget https://lab-data-collections.s3.amazonaws.com/wiki-people.json
 
 # process the wiki-people.json file using the "abstract" field for vectorization
-trails --input "wiki-people.json" --label "name" --text "abstract"
+trails --input "wiki-people.json" --text "abstract" --label "name"
 ```
+
+Here we instruct trails to parse `wiki-people.json`. We also indicate the "abstract" attribute in the JSON should be vectorized, and the "name" attribute in the JSON should be used as the label for each observation.
 
 # Examples
 
 [Wikipedia People](https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/index.html)<br/>
-[Samuel Johnson's Dictionary](https://lab-apps.s3-us-west-2.amazonaws.com/sketches/trails/johnson/index.html)<br/>
 [Oslo Photographic Collection](https://lab-apps.s3-us-west-2.amazonaws.com/trails/oslo/index.html)<br/>
 [Harvard Art Museum Collection](https://lab-apps.s3-us-west-2.amazonaws.com/trails/image-data/index.html)<br/>
 
@@ -49,7 +50,7 @@ trails --inputs "images/*.jpg"
 To process a collection of JSON files with Trails, provide the path to your JSON file(s), then indicate the fields that should be used for each item's `label` and `text` fields:
 
 ```bash
-trails --input "wiki-people.json" --label "name" --text "abstract"
+trails --input "wiki-people.json" --text "abstract" --label "name"
 ```
 
 **Custom Vectors**
