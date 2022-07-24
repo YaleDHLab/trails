@@ -144,7 +144,7 @@ Points.prototype.init = function() {
   this.objects = [];
   this.colors = [];
   this.n = null;
-  this.max = 150000;
+  this.max = 500000;
   get('data/positions.json.gz', this.handleDataJson.bind(this, 'positions'))
   get('data/colors.json.gz', this.handleDataJson.bind(this, 'colors'))
 }
@@ -815,6 +815,7 @@ function Preview() {
   this.mouseTimeout = null;
   this.sizes = {}; // size cache, maps id to width & height
   this.elems = {
+    container: document.querySelector('#previews-container'),
     offscreen: document.querySelector('#offscreen'),
     hovered: document.querySelector('#hovered-preview'),
     cursor: document.querySelector('#cursor'),
@@ -865,7 +866,10 @@ Preview.prototype.select = async function() {
   // load all object metadata
   Promise.all(this.selected.map(d => d.elem)).then(function(results) {
     // handle race condition where new previews arive before promise resolves
-    if (results.length !== this.selected.length) return;
+    if (results.length !== this.selected.length) {
+      this.elems.container.innerHTML = '';
+      return;
+    }
     // set the loaded html objects and their positions
     results.map((r, ridx) => {
       var s = this.selected[ridx];
@@ -874,12 +878,11 @@ Preview.prototype.select = async function() {
       s.elem.style.top = s.y + 'px';
     });
     // documentfragment prevents reflow after each child is added
-    var elem = document.querySelector('#previews-container');
     var children = document.createDocumentFragment();
     this.selected.forEach(function(d) {
       children.appendChild(d.elem);
     })
-    elem.appendChild(children);
+    this.elems.container.appendChild(children);
   }.bind(this))
 }
 
@@ -937,7 +940,9 @@ Preview.prototype.getElementSize = function(d) {
 Preview.prototype.getPreviewHTML = async function(index) {
   if (!points.initialized) return;
   // get HTML string
-  var data = await fetch(`data/objects/${index}.json`).then(r => r.json());
+  var data = await fetch(`data/objects/${index}.json`)
+    .then(r => r.json())
+    .catch(err => new Promise((resolve, reject) => {resolve({})}))
   if (data.image) data.image = getLocalPath(data.image);
   var html = _.template(this.template)({
     index: index,

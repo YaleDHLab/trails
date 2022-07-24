@@ -12,12 +12,14 @@ canvas,
   overflow: hidden;
 }
 
-body {
+body,
+#loader {
   background-color: #E8DCB8;
   background-image: url(/assets/images/paper.png);
 }
 
-body.night-mode {
+body.night-mode,
+#loader {
   background-color: #000;
   background-image: none;
 }
